@@ -3,22 +3,22 @@ FROM node:20 AS builder
 
 WORKDIR /app
 
-# Alleen package.json kopiëren, lockfile negeren (vermijdt veel dependency-ellende)
+# Copy only package.json first for better layer caching
 COPY package.json ./
 
-# Installeer dependencies (minder streng dan npm ci)
-RUN npm install --legacy-peer-deps
+# Install dependencies (less strict than npm ci)
+RUN npm install
 
-# Rest van de code
+# Copy the rest of the project
 COPY . .
 
-# Map voor SQLite DB
+# Ensure directory for SQLite DB exists
 RUN mkdir -p /app/data
 
 ENV NODE_ENV=production
 ENV DATABASE_URL="file:/app/data/boekhouding.db"
 
-# Prisma + build
+# Generate Prisma client and build Next.js app
 RUN npx prisma generate
 RUN npm run build
 
@@ -30,10 +30,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV DATABASE_URL="file:/app/data/boekhouding.db"
 
-# Gebruiker aanmaken
+# Create non-root user
 RUN useradd -m nextjs
 
-# Nodige bestanden uit build-stage kopiëren
+# Copy necessary files from build stage
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
@@ -43,7 +43,7 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 
-# Map voor DB + rechten
+# Database directory with proper ownership
 RUN mkdir -p /app/data && chown -R nextjs:nextjs /app
 
 USER nextjs
@@ -52,5 +52,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Next.js standalone start meestal via server.js
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+# Run migrations on start then launch standalone Next server
+CMD ["sh", "-c", "npm run migrate:deploy && node server.js"]
