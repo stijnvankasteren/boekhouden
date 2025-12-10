@@ -1,56 +1,53 @@
-# ---------- BUILD STAGE ----------
-FROM node:20 AS builder
+FROM node:20-alpine AS base
 
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy only package.json first for better layer caching
-COPY package.json ./
+COPY package.json package-lock.json* ./
+RUN npm ci
 
-# Install dependencies (less strict than npm ci)
-RUN npm install
-
-# Copy the rest of the project
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Ensure directory for SQLite DB exists
 RUN mkdir -p /app/data
 
-ENV NODE_ENV=production
+ENV NODE_ENV production
 ENV DATABASE_URL="file:/app/data/boekhouding.db"
 
-# Generate Prisma client and build Next.js app
 RUN npx prisma generate
 RUN npm run build
 
-# ---------- RUNTIME STAGE ----------
-FROM node:20-slim AS runner
-
+FROM base AS runner
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-ENV NODE_ENV=production
+ENV NODE_ENV production
 ENV DATABASE_URL="file:/app/data/boekhouding.db"
 
-# Create non-root user
-RUN useradd -m nextjs
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
 
-# Copy necessary files from build stage
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 
-# Database directory with proper ownership
-RUN mkdir -p /app/data && chown -R nextjs:nextjs /app
+RUN mkdir -p .next
+RUN chown nextjs:nodejs .next
+
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/prisma ./prisma
+
+RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 
 USER nextjs
 
 EXPOSE 3000
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
 
-# Run migrations on start then launch standalone Next server
-CMD ["sh", "-c", "npm run migrate:deploy && node server.js"]
+ENV PORT 3000
+ENV HOSTNAME "0.0.0.0"
+
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]

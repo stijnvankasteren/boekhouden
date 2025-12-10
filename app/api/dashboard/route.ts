@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
@@ -49,8 +51,9 @@ export async function GET(request: NextRequest) {
       recentTransactions,
     })
   } catch (error) {
+    console.error('Dashboard error:', error)
     return NextResponse.json(
-      { error: 'Fout bij ophalen dashboard data' },
+      { error: 'Fout bij ophalen dashboard data', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }
