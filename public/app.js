@@ -42,7 +42,7 @@ function renderTable(transactions) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
     cell.colSpan = 5;
-    cell.textContent = 'Nog geen transacties';
+    cell.textContent = 'Nog geen data voor dit tabblad';
     cell.style.textAlign = 'center';
     cell.style.color = '#6b7280';
     row.appendChild(cell);
@@ -96,22 +96,50 @@ function applyView() {
   const titleEls = document.querySelectorAll('.panel-header h2');
   const captionEls = document.querySelectorAll('.panel-caption');
 
-  // left panel is form, right panel is table
   const rightTitle = titleEls[1] || titleEls[0];
   const rightCaption = captionEls[1] || captionEls[0];
 
   let txs = lastData.transactions;
 
   switch (currentView) {
+    case 'dashboard':
+      rightTitle.textContent = 'Transacties 2025';
+      rightCaption.textContent = 'Overzicht van alle mutaties.';
+      // alle transacties
+      break;
+    case 'factuur':
+      rightTitle.textContent = 'Factuur';
+      rightCaption.textContent =
+        'Factuurfunctionaliteit is nog niet geïmplementeerd in deze simpele versie.';
+      txs = [];
+      break;
     case 'income':
       rightTitle.textContent = 'Verkopen & Inkomsten';
-      rightCaption.textContent = 'Alle inkomsten-transacties in 2025';
+      rightCaption.textContent = 'Alle inkomsten-transacties in 2025.';
       txs = txs.filter((t) => t.type !== 'expense');
       break;
     case 'expense':
       rightTitle.textContent = 'Inkopen & Uitgaven';
-      rightCaption.textContent = 'Alle uitgaven-transacties in 2025';
+      rightCaption.textContent = 'Alle uitgaven-transacties in 2025.';
       txs = txs.filter((t) => t.type === 'expense');
+      break;
+    case 'categories':
+      rightTitle.textContent = 'Categorieën';
+      rightCaption.textContent =
+        'Categoriebeheer is nog niet geïmplementeerd in deze simpele versie.';
+      txs = [];
+      break;
+    case 'accounts':
+      rightTitle.textContent = 'Rekeningen';
+      rightCaption.textContent =
+        'Rekeningenoverzicht is nog niet geïmplementeerd in deze simpele versie.';
+      txs = [];
+      break;
+    case 'beginbalans':
+      rightTitle.textContent = 'Beginbalans';
+      rightCaption.textContent =
+        'Beginbalans is nog niet geïmplementeerd in deze simpele versie.';
+      txs = [];
       break;
     case 'relations':
       rightTitle.textContent = 'Relaties';
@@ -135,6 +163,12 @@ function applyView() {
       rightTitle.textContent = 'Instellingen';
       rightCaption.textContent =
         'Instellingen zijn nog niet geïmplementeerd in deze simpele versie.';
+      txs = [];
+      break;
+    case 'disclaimer':
+      rightTitle.textContent = 'Disclaimer';
+      rightCaption.textContent =
+        'Dit is een hulpmiddel en geen officiële boekhoudsoftware.';
       txs = [];
       break;
     default:
