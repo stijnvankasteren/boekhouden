@@ -248,27 +248,31 @@
   </template>
 
   <template id="tpl-categories">
-    <h3 class="sheet-title">Categorieën beheren</h3>
+    <h3 class="sheet-title">Categorieën / grootboekrekeningen</h3>
     <div class="sheet-section">
       <p class="sheet-note">
-        Hier kun je zelf categorieën aanmaken die je straks kunt gebruiken in je administratie
-        (bijvoorbeeld <em>Omzet</em>, <em>Kantoorkosten</em>, <em>Autokosten</em>, enz.).
+        Deze tabel werkt zoals in je Excel: per regel een grootboekrekening met daarvóór de
+        <em>groep</em> (ACTIVA, PASSIVA, KOSTEN, OMZET). Deze groepen komen in een aparte kolom
+        naast de rekening te staan.
       </p>
       <table class="sheet-table" id="category-table">
         <thead>
           <tr>
-            <th>Categorie</th>
+            <th>Groep (ACTIVA / PASSIVA / KOSTEN / OMZET)</th>
+            <th>Categorie / rekening</th>
             <th>Type (inkomst / uitgave)</th>
             <th>Opmerkingen</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>Omzet</td>
+            <td>OMZET</td>
+            <td>Omzet NL</td>
             <td>inkomst</td>
             <td>Algemene omzet</td>
           </tr>
           <tr>
+            <td>KOSTEN</td>
             <td>Kantoorkosten</td>
             <td>uitgave</td>
             <td></td>
@@ -276,7 +280,7 @@
         </tbody>
       </table>
       <div class="sheet-actions">
-        <button type="button" data-action="add-row" data-target="category-table">+ Categorie toevoegen</button>
+        <button type="button" data-action="add-row" data-target="category-table">+ Rekening toevoegen</button>
       </div>
       <p class="sheet-note">
         Je kunt cellen direct aanpassen. Vergeet niet op <strong>Wijzigingen opslaan</strong> te klikken.

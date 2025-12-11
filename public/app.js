@@ -719,12 +719,15 @@ function setSheetContent(view) {
           tbody.innerHTML = '';
           currentSettings.categories.forEach((cat) => {
             const tr = document.createElement('tr');
+            const tdGroup = document.createElement('td');
+            tdGroup.textContent = cat.group || '';
             const tdName = document.createElement('td');
             tdName.textContent = cat.name || '';
             const tdType = document.createElement('td');
             tdType.textContent = cat.type || '';
             const tdNotes = document.createElement('td');
             tdNotes.textContent = cat.notes || '';
+            tr.appendChild(tdGroup);
             tr.appendChild(tdName);
             tr.appendChild(tdType);
             tr.appendChild(tdNotes);
@@ -822,11 +825,12 @@ async function saveCurrentSheet() {
         rows.forEach((row) => {
           const cells = row.querySelectorAll('td');
           if (cells.length >= 2) {
-            const name = cells[0].textContent.trim();
-            const type = cells[1].textContent.trim();
-            const notes = cells[2] ? cells[2].textContent.trim() : '';
+            const group = cells[0].textContent.trim();
+            const name = cells[1] ? cells[1].textContent.trim() : '';
+            const type = cells[2] ? cells[2].textContent.trim() : '';
+            const notes = cells[3] ? cells[3].textContent.trim() : '';
             if (name) {
-              newCategories.push({ name, type, notes });
+              newCategories.push({ group, name, type, notes });
             }
           }
         });
