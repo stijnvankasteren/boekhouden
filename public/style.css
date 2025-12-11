@@ -27,8 +27,6 @@ body {
   flex-direction: column;
 }
 
-/* Header + nav */
-
 .app-header {
   background: #ffffff;
   border-bottom: 1px solid var(--border);
@@ -74,6 +72,8 @@ body {
   color: var(--text-muted);
   white-space: nowrap;
   border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
 }
 
 .nav-link:hover {
@@ -87,8 +87,6 @@ body {
   border-color: var(--blue);
 }
 
-/* Page */
-
 .page {
   flex: 1;
   padding: 1rem 2rem 2rem;
@@ -96,8 +94,6 @@ body {
   width: 100%;
   margin: 0 auto;
 }
-
-/* Summary cards */
 
 .summary-row {
   display: grid;
@@ -133,8 +129,6 @@ body {
   color: var(--red);
 }
 
-/* Content grid */
-
 .content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr);
@@ -149,8 +143,6 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-
-/* Panels */
 
 .panel {
   background: #ffffff;
@@ -173,8 +165,6 @@ body {
   font-size: 0.8rem;
   color: var(--text-muted);
 }
-
-/* Form */
 
 .tx-form {
   display: grid;
@@ -241,8 +231,6 @@ button:disabled {
   color: var(--red);
 }
 
-/* Table */
-
 .table-wrapper {
   max-height: 450px;
   overflow: auto;
@@ -286,8 +274,6 @@ th {
 .tx-type-expense {
   color: var(--red);
 }
-
-/* Footer */
 
 .app-footer {
   border-top: 1px solid var(--border);

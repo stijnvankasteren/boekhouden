@@ -1,3 +1,9 @@
+let currentView = 'dashboard';
+let lastData = {
+  transactions: [],
+  summary: { totalIncome: 0, totalExpenses: 0, result: 0 },
+};
+
 async function fetchData() {
   const res = await fetch('/api/transactions');
   if (!res.ok) {
@@ -9,8 +15,8 @@ async function fetchData() {
 function formatCurrency(amount) {
   return new Intl.NumberFormat('nl-NL', {
     style: 'currency',
-    currency: 'EUR'
-  }).format(amount);
+    currency: 'EUR',
+  }).format(amount || 0);
 }
 
 function updateSummary(summary) {
@@ -18,9 +24,9 @@ function updateSummary(summary) {
   const expensesEl = document.getElementById('totalExpenses');
   const resultEl = document.getElementById('result');
 
-  incomeEl.textContent = formatCurrency(summary.totalIncome || 0);
-  expensesEl.textContent = formatCurrency(summary.totalExpenses || 0);
-  resultEl.textContent = formatCurrency(summary.result || 0);
+  incomeEl.textContent = formatCurrency(summary.totalIncome);
+  expensesEl.textContent = formatCurrency(summary.totalExpenses);
+  resultEl.textContent = formatCurrency(summary.result);
 
   resultEl.classList.remove('positive', 'negative', 'neutral');
   if (summary.result > 0) resultEl.classList.add('positive');
@@ -57,11 +63,13 @@ function renderTable(transactions) {
 
     const typeCell = document.createElement('td');
     typeCell.textContent = tx.type === 'expense' ? 'Uitgave' : 'Inkomst';
-    typeCell.className = tx.type === 'expense' ? 'tx-type-expense' : 'tx-type-income';
+    typeCell.className =
+      tx.type === 'expense' ? 'tx-type-expense' : 'tx-type-income';
     row.appendChild(typeCell);
 
     const amountCell = document.createElement('td');
     amountCell.textContent = formatCurrency(tx.amount);
+    amountCell.style.textAlign = 'right';
     row.appendChild(amountCell);
 
     const actionCell = document.createElement('td');
@@ -73,7 +81,7 @@ function renderTable(transactions) {
     btn.addEventListener('click', async () => {
       if (!confirm('Transactie verwijderen?')) return;
       await fetch('/api/transactions/' + encodeURIComponent(tx.id), {
-        method: 'DELETE'
+        method: 'DELETE',
       });
       await reload();
     });
@@ -84,11 +92,79 @@ function renderTable(transactions) {
   }
 }
 
+function applyView() {
+  const titleEls = document.querySelectorAll('.panel-header h2');
+  const captionEls = document.querySelectorAll('.panel-caption');
+
+  // left panel is form, right panel is table
+  const rightTitle = titleEls[1] || titleEls[0];
+  const rightCaption = captionEls[1] || captionEls[0];
+
+  let txs = lastData.transactions;
+
+  switch (currentView) {
+    case 'income':
+      rightTitle.textContent = 'Verkopen & Inkomsten';
+      rightCaption.textContent = 'Alle inkomsten-transacties in 2025';
+      txs = txs.filter((t) => t.type !== 'expense');
+      break;
+    case 'expense':
+      rightTitle.textContent = 'Inkopen & Uitgaven';
+      rightCaption.textContent = 'Alle uitgaven-transacties in 2025';
+      txs = txs.filter((t) => t.type === 'expense');
+      break;
+    case 'relations':
+      rightTitle.textContent = 'Relaties';
+      rightCaption.textContent =
+        'Relatiebeheer is nog niet geïmplementeerd in deze simpele versie.';
+      txs = [];
+      break;
+    case 'wvbalans':
+      rightTitle.textContent = 'Winst & Verlies / Balans';
+      rightCaption.textContent =
+        'Samenvattende rapportages volgen nog in een toekomstige versie.';
+      txs = [];
+      break;
+    case 'btw':
+      rightTitle.textContent = 'Btw-aangifte';
+      rightCaption.textContent =
+        'Btw-overzichten volgen nog in een toekomstige versie.';
+      txs = [];
+      break;
+    case 'settings':
+      rightTitle.textContent = 'Instellingen';
+      rightCaption.textContent =
+        'Instellingen zijn nog niet geïmplementeerd in deze simpele versie.';
+      txs = [];
+      break;
+    default:
+      rightTitle.textContent = 'Transacties 2025';
+      rightCaption.textContent = 'Overzicht van alle mutaties.';
+      break;
+  }
+
+  renderTable(txs);
+}
+
+function setActiveNav(view) {
+  currentView = view;
+  document.querySelectorAll('.top-nav .nav-link').forEach((btn) => {
+    if (btn.dataset.view === view) btn.classList.add('active');
+    else btn.classList.remove('active');
+  });
+  applyView();
+}
+
 async function reload() {
   try {
     const data = await fetchData();
-    renderTable(data.transactions || []);
-    updateSummary(data.summary || { totalIncome: 0, totalExpenses: 0, result: 0 });
+    lastData = {
+      transactions: data.transactions || [],
+      summary:
+        data.summary || { totalIncome: 0, totalExpenses: 0, result: 0 },
+    };
+    applyView();
+    updateSummary(lastData.summary);
   } catch (err) {
     console.error(err);
     const msg = document.getElementById('formMessage');
@@ -112,25 +188,21 @@ async function onSubmit(event) {
     const res = await fetch('/api/transactions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, description, amount, type })
+      body: JSON.stringify({ date, description, amount, type }),
     });
 
     if (!res.ok) {
       throw new Error('Fout bij opslaan');
     }
 
-    const data = await res.json();
+    await reload();
+
     msg.textContent = 'Transactie opgeslagen';
     msg.className = 'message ok';
 
-    // Reset form
     document.getElementById('description').value = '';
     document.getElementById('amount').value = '';
-
     document.getElementById('date').valueAsDate = new Date();
-
-    renderTable(data.transaction ? (await fetchData()).transactions : []);
-    updateSummary(data.summary || { totalIncome: 0, totalExpenses: 0, result: 0 });
   } catch (err) {
     console.error(err);
     msg.textContent = 'Fout bij opslaan van transactie';
@@ -143,6 +215,16 @@ window.addEventListener('DOMContentLoaded', () => {
   if (todayInput) {
     todayInput.valueAsDate = new Date();
   }
+
   document.getElementById('txForm').addEventListener('submit', onSubmit);
+
+  document.querySelectorAll('.top-nav .nav-link').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      const view = btn.dataset.view || 'dashboard';
+      setActiveNav(view);
+    });
+  });
+
   reload();
 });

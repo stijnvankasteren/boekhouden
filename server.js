@@ -7,7 +7,6 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'transactions.json');
 
-// Ensure data dir + file exist
 function initStorage() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -39,7 +38,7 @@ function sendJson(res, status, data) {
   const body = JSON.stringify(data);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(body)
+    'Content-Length': Buffer.byteLength(body),
   });
   res.end(body);
 }
@@ -59,7 +58,6 @@ function serveStatic(req, res) {
 
   const filePath = path.join(__dirname, 'public', pathname);
   if (!filePath.startsWith(path.join(__dirname, 'public'))) {
-    // Basic path traversal protection
     return notFound(res);
   }
 
@@ -80,6 +78,20 @@ function serveStatic(req, res) {
   });
 }
 
+function calculateSummary(list) {
+  let income = 0;
+  let expenses = 0;
+  for (const tx of list) {
+    if (tx.type === 'expense') expenses += tx.amount;
+    else income += tx.amount;
+  }
+  return {
+    totalIncome: income,
+    totalExpenses: expenses,
+    result: income - expenses,
+  };
+}
+
 function handleApi(req, res) {
   const parsedUrl = url.parse(req.url, true);
   const pathname = parsedUrl.pathname;
@@ -88,16 +100,15 @@ function handleApi(req, res) {
     const list = readTransactions();
     return sendJson(res, 200, {
       transactions: list,
-      summary: calculateSummary(list)
+      summary: calculateSummary(list),
     });
   }
 
   if (pathname === '/api/transactions' && req.method === 'POST') {
     let body = '';
-    req.on('data', chunk => {
+    req.on('data', (chunk) => {
       body += chunk.toString('utf8');
       if (body.length > 1e6) {
-        // basic protection
         req.destroy();
       }
     });
@@ -105,7 +116,6 @@ function handleApi(req, res) {
       try {
         const data = JSON.parse(body || '{}');
         const list = readTransactions();
-
         const now = new Date();
         const id = Date.now().toString();
 
@@ -115,13 +125,17 @@ function handleApi(req, res) {
           description: data.description || '',
           amount: Number(data.amount) || 0,
           type: data.type === 'expense' ? 'expense' : 'income',
-          createdAt: now.toISOString()
+          createdAt: now.toISOString(),
         };
 
         list.push(tx);
         writeTransactions(list);
 
-        return sendJson(res, 201, { ok: true, transaction: tx, summary: calculateSummary(list) });
+        return sendJson(res, 201, {
+          ok: true,
+          transaction: tx,
+          summary: calculateSummary(list),
+        });
       } catch (e) {
         console.error('Error parsing POST body:', e);
         return sendJson(res, 400, { ok: false, error: 'Invalid JSON body' });
@@ -133,26 +147,15 @@ function handleApi(req, res) {
   if (pathname.startsWith('/api/transactions/') && req.method === 'DELETE') {
     const id = pathname.split('/').pop();
     const list = readTransactions();
-    const newList = list.filter(t => t.id !== id);
+    const newList = list.filter((t) => t.id !== id);
     writeTransactions(newList);
-    return sendJson(res, 200, { ok: true, summary: calculateSummary(newList) });
+    return sendJson(res, 200, {
+      ok: true,
+      summary: calculateSummary(newList),
+    });
   }
 
   return notFound(res);
-}
-
-function calculateSummary(list) {
-  let income = 0;
-  let expenses = 0;
-  for (const tx of list) {
-    if (tx.type === 'expense') expenses += tx.amount;
-    else income += tx.amount;
-  }
-  return {
-    totalIncome: income,
-    totalExpenses: expenses,
-    result: income - expenses
-  };
 }
 
 const server = http.createServer((req, res) => {
