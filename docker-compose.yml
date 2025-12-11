@@ -6,10 +6,10 @@ services:
     container_name: boekhouding-db
     restart: unless-stopped
     environment:
-      - MYSQL_ROOT_PASSWORD=supersecretroot
-      - MYSQL_DATABASE=boekhouding-db
-      - MYSQL_USER=boekhouding
-      - MYSQL_PASSWORD=boekhouding-password
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
     ports:
@@ -19,6 +19,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        DB_USER: ${DB_USER}
+        DB_PASSWORD: ${DB_PASSWORD}
+        DB_NAME: ${DB_NAME}
+        DB_HOST: boekhouding-db
     container_name: boekhouding-app
     restart: unless-stopped
     depends_on:
@@ -26,8 +31,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=mysql://boekhouding:boekhouding-password@boekhouding-db:3306/boekhouding-db
       - NODE_ENV=development
+      - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@boekhouding-db:3306/${DB_NAME}
 
 volumes:
   db_data:
