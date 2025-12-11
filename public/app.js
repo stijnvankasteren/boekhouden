@@ -92,6 +92,16 @@ function renderTable(transactions) {
   }
 }
 
+function setSheetContent(view) {
+  const container = document.getElementById('sheetContent');
+  if (!container) return;
+  container.innerHTML = '';
+  const tpl = document.getElementById('tpl-' + view);
+  if (tpl && tpl.content) {
+    container.appendChild(tpl.content.cloneNode(true));
+  }
+}
+
 function applyView() {
   const titleEls = document.querySelectorAll('.panel-header h2');
   const captionEls = document.querySelectorAll('.panel-caption');
@@ -104,8 +114,7 @@ function applyView() {
   switch (currentView) {
     case 'dashboard':
       rightTitle.textContent = 'Transacties 2025';
-      rightCaption.textContent = 'Overzicht van alle mutaties.';
-      // alle transacties
+      rightCaption.textContent = 'Overzicht van alle mutaties (Dashboard).';
       break;
     case 'factuur':
       rightTitle.textContent = 'Factuur';
@@ -178,6 +187,7 @@ function applyView() {
   }
 
   renderTable(txs);
+  setSheetContent(currentView);
 }
 
 function setActiveNav(view) {

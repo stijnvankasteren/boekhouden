@@ -297,3 +297,34 @@ th {
     align-items: flex-start;
   }
 }
+
+
+.sheet-content {
+  margin-top: 0.75rem;
+}
+
+.sheet-title {
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+  color: var(--text-muted);
+}
+
+.sheet-wrapper {
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: #ffffff;
+}
+
+.sheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.sheet-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.25rem 0.35rem;
+  white-space: nowrap;
+}
