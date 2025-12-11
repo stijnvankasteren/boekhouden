@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <title>Boekhouding Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-title">SVK Beheer Holding B.V.</div>
+      <div class="brand-subtitle">Jaar 2025 &mdash; Simpele webversie</div>
+    </div>
+    <div class="brand-meta">
+      <span class="tag">Layout gebaseerd op Excel 2025</span>
+    </div>
+  </header>
+
+  <nav class="top-nav">
+    <button type="button" class="nav-link active" data-view="dashboard">Dashboard</button>
+    <button type="button" class="nav-link" data-view="factuur">Factuur</button>
+    <button type="button" class="nav-link" data-view="income">Verkopen &amp; Inkomsten</button>
+    <button type="button" class="nav-link" data-view="expense">Inkopen &amp; Uitgaven</button>
+    <button type="button" class="nav-link" data-view="categories">Categorieën</button>
+    <button type="button" class="nav-link" data-view="accounts">Rekeningen</button>
+    <button type="button" class="nav-link" data-view="beginbalans">Beginbalans</button>
+    <button type="button" class="nav-link" data-view="relations">Relaties</button>
+    <button type="button" class="nav-link" data-view="wvbalans">W&amp;V en Balans</button>
+    <button type="button" class="nav-link" data-view="btw">Btw-aangifte</button>
+    <button type="button" class="nav-link" data-view="settings">Instellingen</button>
+    <button type="button" class="nav-link" data-view="disclaimer">Disclaimer</button>
+  </nav>
+
+  <main class="page">
+    <section class="summary-row">
+      <div class="summary-card income">
+        <div class="summary-label">Inkomsten</div>
+        <div id="totalIncome" class="summary-amount">€ 0,00</div>
+      </div>
+      <div class="summary-card expense">
+        <div class="summary-label">Uitgaven</div>
+        <div id="totalExpenses" class="summary-amount">€ 0,00</div>
+      </div>
+      <div class="summary-card result">
+        <div class="summary-label">Resultaat</div>
+        <div id="result" class="summary-amount">€ 0,00</div>
+      </div>
+    </section>
+
+    <section class="content-grid">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Nieuwe transactie</h2>
+          <span class="panel-caption">Vul hieronder inkomsten en uitgaven in</span>
+        </div>
+        <form id="txForm" class="tx-form">
+          <div class="field">
+            <label for="date">Datum</label>
+            <input type="date" id="date" required />
+          </div>
+
+          <div class="field">
+            <label for="description">Omschrijving</label>
+            <input type="text" id="description" placeholder="Bijv. factuur klant" required />
+          </div>
+
+          <div class="field">
+            <label for="amount">Bedrag (in euro)</label>
+            <input type="number" id="amount" step="0.01" required />
+          </div>
+
+          <div class="field">
+            <label for="type">Type</label>
+            <select id="type">
+              <option value="income">Inkomst</option>
+              <option value="expense">Uitgave</option>
+            </select>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit">Opslaan</button>
+          </div>
+        </form>
+        <p id="formMessage" class="message"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Transacties 2025</h2>
+          <span class="panel-caption">Overzicht van alle mutaties.</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Datum</th>
+                <th>Omschrijving</th>
+                <th>Type</th>
+                <th class="amount-col">Bedrag</th>
+                <th class="action-col"></th>
+              </tr>
+            </thead>
+            <tbody id="txTableBody">
+              <!-- Rijen via JavaScript -->
+            </tbody>
+          </table>
+        </div>
+        <div id="sheetContent" class="sheet-content"></div>
+        <div id="sheetToolbar" class="sheet-toolbar">
+          <button type="button" id="saveSheetBtn">Wijzigingen opslaan</button>
+          <span id="sheetMessage" class="sheet-message"></span>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <div>Data wordt opgeslagen als JSON-bestand in deze container (<code>/app/data/transactions.json</code>).</div>
+    <div class="footer-right">1 container &mdash; geen externe database nodig.</div>
+  </footer>
+
+  <div id="sheet-templates" style="display:none;">
+  <template id="tpl-dashboard">
+    <h3 class="sheet-title">Snelle acties</h3>
+    <div class="sheet-section">
+      <p class="sheet-note">
+        Gebruik de knoppen hieronder om snel naar de belangrijkste onderdelen van je administratie te gaan.
+      </p>
+      <div class="sheet-actions">
+        <button type="button" class="nav-chip" data-goto-view="income">+ Nieuwe inkomst</button>
+        <button type="button" class="nav-chip" data-goto-view="expense">+ Nieuwe uitgave</button>
+        <button type="button" class="nav-chip" data-goto-view="wvbalans">Winst &amp; verlies</button>
+        <button type="button" class="nav-chip" data-goto-view="btw">Btw-overzicht</button>
+        <button type="button" class="nav-chip" data-goto-view="categories">Categorieën beheren</button>
+        <button type="button" class="nav-chip" data-goto-view="accounts">Rekeningen beheren</button>
+        <button type="button" class="nav-chip" data-goto-view="relations">Relaties beheren</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-factuur">
+    <h3 class="sheet-title">Factuur</h3>
+    <div class="sheet-section">
+      <p class="sheet-note">
+        In deze simpele versie kun je nog geen echte facturen genereren.
+        Wel kun je de transacties op het tabblad <strong>Verkopen &amp; Inkomsten</strong> vastleggen.
+      </p>
+      <div class="field">
+        <label for="invoice-prefix">Factuurnummer prefix</label>
+        <input id="invoice-prefix" type="text" placeholder="Bijv. 2025-" />
+      </div>
+      <div class="field">
+        <label for="invoice-next">Volgend factuurnummer</label>
+        <input id="invoice-next" type="number" min="1" step="1" />
+      </div>
+      <p class="sheet-note">
+        Deze instellingen worden samen met de rest van de pagina opgeslagen als je op
+        <strong>Wijzigingen opslaan</strong> klikt.
+      </p>
+    </div>
+  </template>
+
+  <template id="tpl-income">
+    <h3 class="sheet-title">Verkopen &amp; Inkomsten</h3>
+    <div class="sheet-section">
+      <p class="sheet-note">
+        Gebruik het linker formulier om nieuwe inkomsten toe te voegen. Hieronder kun je eventueel
+        een eigen overzicht of notities bijhouden.
+      </p>
+      <table class="sheet-table" id="income-notes">
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Klant / omschrijving</th>
+            <th>Bedrag</th>
+            <th>Opmerkingen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td></td>
+            <td>Voorbeeld: abonnement klant X</td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="sheet-actions">
+        <button type="button" data-action="add-row" data-target="income-notes">+ Rij toevoegen</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-expense">
+    <h3 class="sheet-title">Inkopen &amp; Uitgaven</h3>
+    <div class="sheet-section">
+      <p class="sheet-note">
+        Gebruik het linker formulier om nieuwe uitgaven toe te voegen. Hieronder kun je vaste lasten
+        of andere notities bijhouden.
+      </p>
+      <table class="sheet-table" id="expense-notes">
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Leverancier / omschrijving</th>
+            <th>Bedrag</th>
+            <th>Opmerkingen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td></td>
+            <td>Voorbeeld: huur, energie, software, ...</td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="sheet-actions">
+        <button type="button" data-action="add-row" data-target="expense-notes">+ Rij toevoegen</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-categories">
+    <h3 class="sheet-title">Categorieën beheren</h3>
+    <div class="sheet-section">
+      <p class="sheet-note">
+        Hier kun je zelf categorieën aanmaken die je straks kunt gebruiken in je administratie
+        (bijvoorbeeld <em>Omzet</em>, <em>Kantoorkosten</em>, <em>Autokosten</em>, enz.).
+      </p>
+      <table class="sheet-table" id="category-table">
+        <thead>
+          <tr>
+            <th>Categorie</th>
+            <th>Type (inkomst / uitgave)</th>
+            <th>Opmerkingen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Omzet</td>
+            <td>inkomst</td>
+            <td>Algemene omzet</td>
+          </tr>
+          <tr>
+            <td>Kantoorkosten</td>
+            <td>uitgave</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="sheet-actions">
+        <button type="button" data-action="add-row" data-target="category-table">+ Categorie toevoegen</button>
+      </div>
+      <p class="sheet-note">
+        Je kunt cellen direct aanpassen. Vergeet niet op <strong>Wijzigingen opslaan</strong> te klikken.
+      </p>
+    </div>
+  </template>
+
+  <template id="tpl-accounts">
+    <h3 class="sheet-title">Rekeningen beheren</h3>
+    <div class="sheet-section">
+      <p class="sheet-note">
+        Leg hier de rekeningen vast die je gebruikt in je administratie, zoals bankrekeningen,
+        kas, privé, enz.
+      </p>
+      <table class="sheet-table" id="accounts-table">
+        <thead>
+          <tr>
+            <th>Rekening</th>
+            <th>IBAN / nummer</th>
+            <th>Type (bank, kas, privé)</th>
+            <th>Opmerkingen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Zakelijke betaalrekening</td>
+            <td></td>
+            <td>bank</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Kas</td>
+            <td></td>
+            <td>kas</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="sheet-actions">
+        <button type="button" data-action="add-row" data-target="accounts-table">+ Rekening toevoegen</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-beginbalans">
+    <h3 class="sheet-title">Beginbalans</h3>
+    <div class="sheet-section">
+      <p class="sheet-note">
+        Vul hier je beginbalans in per 1 januari. Dit is het vermogen en de bezittingen / schulden
+        waarmee je het jaar start.
+      </p>
+      <table class="sheet-table" id="beginbalans-table">
+        <thead>
+          <tr>
+            <th>Post</th>
+            <th>Bedrag</th>
+            <th>Debet / credit</th>
+            <th>Opmerkingen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Zakelijke bankrekening</td>
+            <td></td>
+            <td>debet</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Eigen vermogen</td>
+            <td></td>
+            <td>credit</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="sheet-actions">
+        <button type="button" data-action="add-row" data-target="beginbalans-table">+ Rij toevoegen</button>
+      </div>
+      <p class="sheet-note">
+        De exacte berekeningen van je balans en resultaat worden in een later stap verder
+        geautomatiseerd. Voor nu is dit een eenvoudig overzicht.
+      </p>
+    </div>
+  </template>
+
+  <template id="tpl-relations">
+    <h3 class="sheet-title">Relaties (klanten &amp; leveranciers)</h3>
+    <div class="sheet-section">
+      <p class="sheet-note">
+        Bewaar hier een simpel overzicht van je belangrijkste relaties. Later kun je deze eventueel
+        koppelen aan transacties.
+      </p>
+      <table class="sheet-table" id="relations-table">
+        <thead>
+          <tr>
+            <th>Naam</th>
+            <th>Type</th>
+            <th>E‑mail / telefoon</th>
+            <th>Opmerkingen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Voorbeeld klant</td>
+            <td>klant</td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Voorbeeld leverancier</td>
+            <td>leverancier</td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="sheet-actions">
+        <button type="button" data-action="add-row" data-target="relations-table">+ Relatie toevoegen</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-wvbalans">
+    <h3 class="sheet-title">Winst &amp; verlies / Balans</h3>
+    <div class="sheet-section">
+      <p class="sheet-note">
+        Dit tabblad is een samenvatting van je resultaat (winst / verlies) en de balans aan het einde
+        van het jaar. In deze simpele versie vul je bedragen handmatig in.
+      </p>
+      <table class="sheet-table" id="wv-table">
+        <thead>
+          <tr>
+            <th>Post</th>
+            <th>Bedrag</th>
+            <th>Opmerkingen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Totale omzet</td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Totaal uitgaven</td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Resultaat (winst / verlies)</td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Eigen vermogen begin jaar</td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Eigen vermogen eind jaar</td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="sheet-actions">
+        <button type="button" data-action="add-row" data-target="wv-table">+ Extra post toevoegen</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-btw">
+    <h3 class="sheet-title">Btw-aangifte</h3>
+    <div class="sheet-section">
+      <p class="sheet-note">
+        Gebruik dit overzicht om handmatig je btw‑bedragen bij te houden ter voorbereiding op de
+        aangifte bij de Belastingdienst.
+      </p>
+      <table class="sheet-table" id="btw-table">
+        <thead>
+          <tr>
+            <th>Omschrijving</th>
+            <th>Bedrag excl. btw</th>
+            <th>Btw‑bedrag</th>
+            <th>Opmerkingen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Omzet hoog tarief</td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Omzet laag tarief</td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Voorbelasting (btw op inkoop)</td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="sheet-actions">
+        <button type="button" data-action="add-row" data-target="btw-table">+ Regel toevoegen</button>
+      </div>
+      <p class="sheet-note">
+        Let op: dit is alleen een hulpmiddel. De daadwerkelijke aangifte doe je altijd in het
+        portaal van de Belastingdienst.
+      </p>
+    </div>
+  </template>
+
+  <template id="tpl-settings">
+    <h3 class="sheet-title">Instellingen</h3>
+    <div class="sheet-section">
+      <div class="field">
+        <label for="settings-year">Boekjaar</label>
+        <input id="settings-year" type="number" min="2000" max="2100" value="2025" />
+      </div>
+      <div class="field">
+        <label for="settings-company">Bedrijfsnaam</label>
+        <input id="settings-company" type="text" placeholder="Naam van je bedrijf" />
+      </div>
+      <div class="field">
+        <label for="settings-notes">Interne notities</label>
+        <textarea id="settings-notes" rows="3" placeholder="Bijv. bijzonderheden voor dit jaar."></textarea>
+      </div>
+      <p class="sheet-note">
+        Deze instellingen worden samen met de rest van de pagina opgeslagen als je op
+        <strong>Wijzigingen opslaan</strong> klikt.
+      </p>
+    </div>
+  </template>
+
+  <template id="tpl-disclaimer">
+    <h3 class="sheet-title">Disclaimer</h3>
+    <div class="sheet-section">
+      <p class="sheet-note">
+        Deze webapp is bedoeld als eenvoudig hulpmiddel om je eigen administratie bij te houden,
+        gebaseerd op je oorspronkelijke Excel‑bestand.
+      </p>
+      <ul class="sheet-list">
+        <li>Het is <strong>geen officiële boekhoudsoftware</strong>.</li>
+        <li>Je blijft zelf verantwoordelijk voor een juiste aangifte en administratie.</li>
+        <li>Controleer belangrijke cijfers altijd met je boekhouder of accountant.</li>
+      </ul>
+      <p class="sheet-note">
+        Door deze app te gebruiken ga je ermee akkoord dat er geen garanties worden gegeven over de
+        juistheid of volledigheid van de berekeningen.
+      </p>
+    </div>
+  </template>
+</div>
+  <script src="/app.js"></script>
+</body>
+</html>
