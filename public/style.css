@@ -328,3 +328,62 @@ th {
   padding: 0.25rem 0.35rem;
   white-space: nowrap;
 }
+
+
+/* Layout toggle: single panel vs transacties-layout */
+.content-grid.single-panel {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.content-grid.single-panel .panel:first-child {
+  display: none;
+}
+
+.content-grid.single-panel .panel:last-child {
+  grid-column: 1 / -1;
+}
+
+/* Hide summary row when not needed */
+.summary-row.hidden {
+  display: none;
+}
+
+/* Sheet toolbar */
+.sheet-toolbar {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.sheet-toolbar button {
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sheet-toolbar button:hover {
+  filter: brightness(0.95);
+}
+
+.sheet-message {
+  color: var(--text-muted);
+}
+.sheet-message.ok {
+  color: #16a34a;
+}
+.sheet-message.error {
+  color: #dc2626;
+}
+
+/* Editable cells highlight on focus */
+.sheet-table td[contenteditable="true"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}

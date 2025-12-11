@@ -4,6 +4,8 @@ let lastData = {
   summary: { totalIncome: 0, totalExpenses: 0, result: 0 },
 };
 
+const sheetCache = {};
+
 async function fetchData() {
   const res = await fetch('/api/transactions');
   if (!res.ok) {
@@ -24,6 +26,8 @@ function updateSummary(summary) {
   const expensesEl = document.getElementById('totalExpenses');
   const resultEl = document.getElementById('result');
 
+  if (!incomeEl || !expensesEl || !resultEl) return;
+
   incomeEl.textContent = formatCurrency(summary.totalIncome);
   expensesEl.textContent = formatCurrency(summary.totalExpenses);
   resultEl.textContent = formatCurrency(summary.result);
@@ -34,8 +38,26 @@ function updateSummary(summary) {
   else resultEl.classList.add('neutral');
 }
 
+function setLayoutForView(view) {
+  const summaryRow = document.querySelector('.summary-row');
+  const grid = document.querySelector('.content-grid');
+  if (!summaryRow || !grid) return;
+
+  const isTxView = view === 'dashboard' || view === 'income' || view === 'expense';
+
+  if (isTxView) {
+    summaryRow.classList.remove('hidden');
+    grid.classList.remove('single-panel');
+  } else {
+    summaryRow.classList.add('hidden');
+    grid.classList.add('single-panel');
+  }
+}
+
 function renderTable(transactions) {
   const tbody = document.getElementById('txTableBody');
+  if (!tbody) return;
+
   tbody.innerHTML = '';
 
   if (!transactions.length) {
@@ -92,13 +114,105 @@ function renderTable(transactions) {
   }
 }
 
+function makeSheetEditable(root) {
+  if (!root) return;
+  root.querySelectorAll('td').forEach((td) => {
+    td.setAttribute('contenteditable', 'true');
+  });
+}
+
+async function loadSheetFromServer(view) {
+  if (sheetCache[view]) return sheetCache[view];
+
+  try {
+    const res = await fetch('/api/sheets/' + encodeURIComponent(view));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data && data.html) {
+      sheetCache[view] = data.html;
+      return data.html;
+    }
+  } catch (e) {
+    console.error('Kon sheet niet laden:', e);
+  }
+
+  sheetCache[view] = null;
+  return null;
+}
+
 function setSheetContent(view) {
   const container = document.getElementById('sheetContent');
   if (!container) return;
+
+  const toolbarMsg = document.getElementById('sheetMessage');
+  if (toolbarMsg) {
+    toolbarMsg.textContent = '';
+    toolbarMsg.className = 'sheet-message';
+  }
+
   container.innerHTML = '';
+
+  const cached = sheetCache[view];
+  if (typeof cached === 'string') {
+    container.innerHTML = cached;
+    makeSheetEditable(container);
+    return;
+  }
+
   const tpl = document.getElementById('tpl-' + view);
   if (tpl && tpl.content) {
-    container.appendChild(tpl.content.cloneNode(true));
+    const fragment = tpl.content.cloneNode(true);
+    container.appendChild(fragment);
+    makeSheetEditable(container);
+  } else {
+    const p = document.createElement('p');
+    p.textContent = 'Geen inhoud beschikbaar voor dit tabblad.';
+    container.appendChild(p);
+  }
+
+  // als er nog geen cache is, probeer dan later nog één keer vanaf de server
+  if (typeof cached === 'undefined') {
+    loadSheetFromServer(view).then((html) => {
+      if (html) {
+        container.innerHTML = html;
+        makeSheetEditable(container);
+      }
+    });
+  }
+}
+
+async function saveCurrentSheet() {
+  const container = document.getElementById('sheetContent');
+  const btn = document.getElementById('saveSheetBtn');
+  const msg = document.getElementById('sheetMessage');
+  if (!container || !btn || !msg) return;
+
+  try {
+    btn.disabled = true;
+    msg.textContent = 'Opslaan...';
+    msg.className = 'sheet-message';
+
+    const html = container.innerHTML;
+
+    const res = await fetch('/api/sheets/' + encodeURIComponent(currentView), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html }),
+    });
+
+    if (!res.ok) {
+      throw new Error('Status ' + res.status);
+    }
+
+    sheetCache[currentView] = html;
+    msg.textContent = 'Opgeslagen';
+    msg.className = 'sheet-message ok';
+  } catch (e) {
+    console.error('Fout bij opslaan van sheet:', e);
+    msg.textContent = 'Fout bij opslaan';
+    msg.className = 'sheet-message error';
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -110,6 +224,8 @@ function applyView() {
   const rightCaption = captionEls[1] || captionEls[0];
 
   let txs = lastData.transactions;
+
+  setLayoutForView(currentView);
 
   switch (currentView) {
     case 'dashboard':
@@ -135,43 +251,43 @@ function applyView() {
     case 'categories':
       rightTitle.textContent = 'Categorieën';
       rightCaption.textContent =
-        'Categoriebeheer is nog niet geïmplementeerd in deze simpele versie.';
+        'Beheer hier je categorieën zoals in het Excel-tabblad.';
       txs = [];
       break;
     case 'accounts':
       rightTitle.textContent = 'Rekeningen';
       rightCaption.textContent =
-        'Rekeningenoverzicht is nog niet geïmplementeerd in deze simpele versie.';
+        'Beheer hier je rekeningen zoals in het Excel-tabblad.';
       txs = [];
       break;
     case 'beginbalans':
       rightTitle.textContent = 'Beginbalans';
       rightCaption.textContent =
-        'Beginbalans is nog niet geïmplementeerd in deze simpele versie.';
+        'Vul hier je beginbalans in zoals in het Excel-tabblad.';
       txs = [];
       break;
     case 'relations':
       rightTitle.textContent = 'Relaties';
       rightCaption.textContent =
-        'Relatiebeheer is nog niet geïmplementeerd in deze simpele versie.';
+        'Beheer hier je relaties zoals in het Excel-tabblad.';
       txs = [];
       break;
     case 'wvbalans':
       rightTitle.textContent = 'Winst & Verlies / Balans';
       rightCaption.textContent =
-        'Samenvattende rapportages volgen nog in een toekomstige versie.';
+        'Overzicht van W&V en balans (waarden uit dit webbestand).';
       txs = [];
       break;
     case 'btw':
       rightTitle.textContent = 'Btw-aangifte';
       rightCaption.textContent =
-        'Btw-overzichten volgen nog in een toekomstige versie.';
+        'Vul hier je btw-overzicht in zoals in het Excel-tabblad.';
       txs = [];
       break;
     case 'settings':
       rightTitle.textContent = 'Instellingen';
       rightCaption.textContent =
-        'Instellingen zijn nog niet geïmplementeerd in deze simpele versie.';
+        'Algemene instellingen voor je administratie.';
       txs = [];
       break;
     case 'disclaimer':
@@ -212,8 +328,10 @@ async function reload() {
   } catch (err) {
     console.error(err);
     const msg = document.getElementById('formMessage');
-    msg.textContent = 'Fout bij laden van data';
-    msg.className = 'message error';
+    if (msg) {
+      msg.textContent = 'Fout bij laden van data';
+      msg.className = 'message error';
+    }
   }
 }
 
@@ -225,8 +343,10 @@ async function onSubmit(event) {
   const type = document.getElementById('type').value;
 
   const msg = document.getElementById('formMessage');
-  msg.textContent = '';
-  msg.className = 'message';
+  if (msg) {
+    msg.textContent = '';
+    msg.className = 'message';
+  }
 
   try {
     const res = await fetch('/api/transactions', {
@@ -241,16 +361,20 @@ async function onSubmit(event) {
 
     await reload();
 
-    msg.textContent = 'Transactie opgeslagen';
-    msg.className = 'message ok';
+    if (msg) {
+      msg.textContent = 'Transactie opgeslagen';
+      msg.className = 'message ok';
+    }
 
     document.getElementById('description').value = '';
     document.getElementById('amount').value = '';
     document.getElementById('date').valueAsDate = new Date();
   } catch (err) {
     console.error(err);
-    msg.textContent = 'Fout bij opslaan van transactie';
-    msg.className = 'message error';
+    if (msg) {
+      msg.textContent = 'Fout bij opslaan van transactie';
+      msg.className = 'message error';
+    }
   }
 }
 
@@ -260,7 +384,17 @@ window.addEventListener('DOMContentLoaded', () => {
     todayInput.valueAsDate = new Date();
   }
 
-  document.getElementById('txForm').addEventListener('submit', onSubmit);
+  const form = document.getElementById('txForm');
+  if (form) {
+    form.addEventListener('submit', onSubmit);
+  }
+
+  const saveSheetBtn = document.getElementById('saveSheetBtn');
+  if (saveSheetBtn) {
+    saveSheetBtn.addEventListener('click', () => {
+      saveCurrentSheet();
+    });
+  }
 
   document.querySelectorAll('.top-nav .nav-link').forEach((btn) => {
     btn.addEventListener('click', (event) => {
