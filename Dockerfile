@@ -1,28 +1,17 @@
-FROM node:20
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Build arguments uit docker-compose
-ARG DB_USER
-ARG DB_PASSWORD
-ARG DB_NAME
-ARG DB_HOST=boekhouding-db
+# Copy app files
+COPY server.js ./server.js
+COPY public ./public
 
-# Deze ENV gebruikt npm / Prisma tijdens install
-ENV DATABASE_URL="mysql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:3306/${DB_NAME}"
-ENV NODE_ENV=development
+# Create data dir for JSON storage
+RUN mkdir -p /app/data
 
-# 1) package-info + prisma-schema
-COPY package.json package-lock.json* ./
-COPY prisma ./prisma
-
-# 2) dependencies
-RUN npm install
-
-# 3) rest van de code
-COPY . .
+ENV NODE_ENV=production
+ENV PORT=3000
 
 EXPOSE 3000
 
-# Geen build, alleen dev (zoals je nu al doet)
-CMD ["npm", "run", "dev"]
+CMD ["node", "server.js"]

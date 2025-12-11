@@ -1,38 +1,18 @@
 version: "3.8"
 
 services:
-  boekhouding-db:
-    image: mariadb:11
-    container_name: boekhouding-db
-    restart: unless-stopped
-    environment:
-      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${DB_NAME}
-      - MYSQL_USER=${DB_USER}
-      - MYSQL_PASSWORD=${DB_PASSWORD}
-    volumes:
-      - db_data:/var/lib/mysql
-    ports:
-      - "3306:3306"
-
   boekhouding-app:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        DB_USER: ${DB_USER}
-        DB_PASSWORD: ${DB_PASSWORD}
-        DB_NAME: ${DB_NAME}
-        DB_HOST: boekhouding-db
     container_name: boekhouding-app
     restart: unless-stopped
-    depends_on:
-      - boekhouding-db
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=development
-      - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@boekhouding-db:3306/${DB_NAME}
+      - TZ=Europe/Amsterdam
+    volumes:
+      - boekhouding_data:/app/data
 
 volumes:
-  db_data:
+  boekhouding_data:

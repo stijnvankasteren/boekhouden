@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <title>Boekhouding (simpel)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Boekhouding</h1>
+    <span class="badge">Simple HTML versie</span>
+  </header>
+
+  <main class="container">
+    <section class="cards">
+      <div class="card">
+        <h2>Inkomsten</h2>
+        <p id="totalIncome" class="amount positive">€ 0,00</p>
+      </div>
+      <div class="card">
+        <h2>Uitgaven</h2>
+        <p id="totalExpenses" class="amount negative">€ 0,00</p>
+      </div>
+      <div class="card">
+        <h2>Resultaat</h2>
+        <p id="result" class="amount neutral">€ 0,00</p>
+      </div>
+    </section>
+
+    <section class="layout">
+      <section class="form-card">
+        <h2>Nieuwe transactie</h2>
+        <form id="txForm">
+          <label>
+            Datum
+            <input type="date" id="date" required />
+          </label>
+
+          <label>
+            Omschrijving
+            <input type="text" id="description" placeholder="Bijv. factuur klant" required />
+          </label>
+
+          <label>
+            Bedrag (in euro)
+            <input type="number" id="amount" step="0.01" required />
+          </label>
+
+          <label>
+            Type
+            <select id="type">
+              <option value="income">Inkomst</option>
+              <option value="expense">Uitgave</option>
+            </select>
+          </label>
+
+          <button type="submit">Opslaan</button>
+        </form>
+        <p id="formMessage" class="message"></p>
+      </section>
+
+      <section class="table-card">
+        <h2>Transacties</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Omschrijving</th>
+              <th>Type</th>
+              <th>Bedrag</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="txTableBody">
+            <!-- rows via JS -->
+          </tbody>
+        </table>
+      </section>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>Data wordt opgeslagen als JSON-bestand in de container (map <code>/app/data</code>).</small>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
