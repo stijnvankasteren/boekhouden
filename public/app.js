@@ -957,7 +957,31 @@ function applyView() {
   }
 
   renderTable(txs);
-  setSheetContent(currentView);
+
+  const sheet = document.getElementById('sheetContent');
+  const toolbar = document.getElementById('sheetToolbar');
+  const sheetViews = [
+    'categories',
+    'accounts',
+    'beginbalans',
+    'relations',
+    'wvbalans',
+    'btw',
+    'settings',
+    'disclaimer',
+  ];
+
+  if (sheetViews.includes(currentView)) {
+    if (sheet) sheet.style.display = '';
+    if (toolbar) toolbar.style.display = '';
+    setSheetContent(currentView);
+  } else {
+    if (sheet) {
+      sheet.style.display = 'none';
+      sheet.innerHTML = '';
+    }
+    if (toolbar) toolbar.style.display = 'none';
+  }
 }
 
 function setActiveNav(view) {
