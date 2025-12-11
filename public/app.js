@@ -326,15 +326,7 @@ function renderTable(transactions) {
   tbody.innerHTML = '';
 
   if (!transactions.length) {
-    const row = document.createElement('tr');
-    const cell = document.createElement('td');
-    // Update the colspan to 6 because we now have an extra column for categorie
-    cell.colSpan = 6;
-    cell.textContent = 'Nog geen data voor dit tabblad';
-    cell.style.textAlign = 'center';
-    cell.style.color = '#6b7280';
-    row.appendChild(cell);
-    tbody.appendChild(row);
+    // Geen lege melding: laat het lichaam gewoon leeg voor een strakkere look.
     return;
   }
 
