@@ -1249,6 +1249,7 @@ function makeSheetEditable(root) {
   });
   // Special-case: categories sheet gets a dropdown in the "Type" column.
   enhanceCategoryTypeDropdown(root);
+  enhanceCategoryRowControls(root);
   enhanceSheetUi(root);
 }
 
@@ -1311,6 +1312,66 @@ function enhanceCategoryTypeDropdown(root) {
 
   
 
+
+function enhanceCategoryRowControls(root) {
+  const table = root.querySelector('#category-table');
+  if (!table) return;
+
+  // Ensure header has an "Acties" column
+  const headRow = table.querySelector('thead tr');
+  if (headRow && headRow.children.length < 4) {
+    const th = document.createElement('th');
+    th.textContent = 'Acties';
+    headRow.appendChild(th);
+  }
+
+  const ensureButtons = (tr) => {
+    const tds = Array.from(tr.children);
+    // Ensure we have 4 columns
+    while (tr.children.length < 4) {
+      tr.appendChild(document.createElement('td'));
+    }
+    const actionTd = tr.children[3];
+    actionTd.removeAttribute('contenteditable');
+    actionTd.classList.add('row-actions');
+    if (actionTd.querySelector('button')) return;
+
+    actionTd.innerHTML = `
+      <button type="button" class="icon-btn" data-action="move-up" title="Omhoog">↑</button>
+      <button type="button" class="icon-btn" data-action="move-down" title="Omlaag">↓</button>
+      <button type="button" class="icon-btn danger" data-action="delete-row" title="Verwijderen">✕</button>
+    `;
+  };
+
+  const tbody = table.querySelector('tbody');
+  if (tbody) {
+    Array.from(tbody.querySelectorAll('tr')).forEach(ensureButtons);
+  }
+
+  // Event delegation for action buttons
+  table.addEventListener('click', (e) => {
+    const btn = e.target && e.target.closest ? e.target.closest('button[data-action]') : null;
+    if (!btn) return;
+    const action = btn.getAttribute('data-action');
+    const tr = btn.closest('tr');
+    const tbody2 = tr ? tr.parentElement : null;
+    if (!tr || !tbody2) return;
+
+    if (action === 'move-up') {
+      const prev = tr.previousElementSibling;
+      if (prev) tbody2.insertBefore(tr, prev);
+      e.preventDefault();
+    } else if (action === 'move-down') {
+      const next = tr.nextElementSibling;
+      if (next) tbody2.insertBefore(next, tr);
+      e.preventDefault();
+    } else if (action === 'delete-row') {
+      tr.remove();
+      e.preventDefault();
+    }
+  }, { passive: false });
+}
+
 function addRowToTable(table) {
   if (!table) return;
   const headRow = table.querySelector('thead tr');
@@ -1321,6 +1382,18 @@ function addRowToTable(table) {
   for (let i = 0; i < colCount; i++) {
     const td = document.createElement('td');
 
+    // Category actions column
+    if (table.id === 'category-table' && i === 3) {
+      td.classList.add('row-actions');
+      td.removeAttribute('contenteditable');
+      td.innerHTML = `
+        <button type="button" class="icon-btn" data-action="move-up" title="Omhoog">↑</button>
+        <button type="button" class="icon-btn" data-action="move-down" title="Omlaag">↓</button>
+        <button type="button" class="icon-btn danger" data-action="delete-row" title="Verwijderen">✕</button>
+      `;
+      tr.appendChild(td);
+      continue;
+    }
     // Category type column uses a dropdown.
     if (table.id === 'category-table' && i === 1) {
       td.removeAttribute('contenteditable');
