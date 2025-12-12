@@ -21,6 +21,33 @@ let lastFilteredTransactions = [];
 let editingTxId = null;
 let attachmentTxId = null;
 
+// Open a stored data-url attachment reliably.
+// Some browsers block opening long `data:` URLs directly (showing about:blank).
+async function openAttachmentDataUrl(dataUrl, filename) {
+  if (!dataUrl || typeof dataUrl !== 'string') return;
+
+  // Must open a window synchronously (user gesture), then navigate it.
+  const w = window.open('about:blank', '_blank', 'noopener');
+  if (!w) {
+    alert('Popup geblokkeerd. Sta popups toe om bijlagen te openen.');
+    return;
+  }
+
+  try {
+    // Convert data URL -> Blob -> blob: URL (more reliable than data: navigation)
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    w.location.href = url;
+    if (filename) w.document.title = filename;
+    // Revoke later
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (e) {
+    // Fallback
+    w.location.href = dataUrl;
+  }
+}
+
 // The currently loaded settings.  Updated whenever loadSettings runs.  Used
 // throughout the UI to adapt text (e.g. displaying the chosen year).
 let currentSettings = null;
@@ -408,8 +435,7 @@ function renderTable(transactions) {
     attBtn.title = tx.attachmentData ? 'Bijlage bekijken' : 'Bon/factuur koppelen';
     attBtn.addEventListener('click', (ev) => { ev.stopPropagation();
       if (tx.attachmentData) {
-        // Open in a new tab/window (data URL)
-        window.open(tx.attachmentData, '_blank', 'noopener');
+        openAttachmentDataUrl(tx.attachmentData, tx.attachmentName);
         return;
       }
       const input = document.getElementById('attachmentInput');
@@ -532,13 +558,18 @@ function renderTxDrawer() {
           const img = document.createElement('img');
           img.src = drawerTx.attachmentData;
           img.alt = drawerTx.attachmentName || 'Bon';
+          img.style.cursor = 'pointer';
+          img.title = 'Open bijlage';
+          img.addEventListener('click', () => openAttachmentDataUrl(drawerTx.attachmentData, drawerTx.attachmentName));
           att.appendChild(img);
         } else {
           const a = document.createElement('a');
-          a.href = drawerTx.attachmentData;
-          a.target = '_blank';
-          a.rel = 'noopener';
+          a.href = '#';
           a.textContent = drawerTx.attachmentName || 'Bijlage openen';
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            openAttachmentDataUrl(drawerTx.attachmentData, drawerTx.attachmentName);
+          });
           att.appendChild(a);
         }
       } else {
@@ -1540,7 +1571,7 @@ window.addEventListener('DOMContentLoaded', () => {
         ev.preventDefault();
         if (!drawerTx) return;
         if (drawerTx.attachmentData) {
-          window.open(drawerTx.attachmentData, '_blank', 'noopener');
+          openAttachmentDataUrl(drawerTx.attachmentData, drawerTx.attachmentName);
           return;
         }
         const input = document.getElementById('attachmentInput');
