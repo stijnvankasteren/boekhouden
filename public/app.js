@@ -289,14 +289,29 @@ const sheetCache = {};
  */
 
 function normalizeCategoryType(t) {
+  // Canonicaliseer categorie-/transactietype naar vaste waarden:
+  // PASSIVA / KOSTEN / OPBRENGSTEN
   const s = (t || '').toString().trim().toLowerCase();
   if (!s) return '';
-  if (s === 'income' || s.startsWith('ink')) return 'inkomst';
-  if (s === 'expense' || s.startsWith('uitg') || s.startsWith('kost')) return 'uitgave';
-  // common Dutch variants
-  if (s.includes('omzet') || s.includes('verkoop')) return 'inkomst';
-  return s;
+
+  // Legacy / Engelse varianten
+  if (s === 'income' || s.startsWith('ink') || s.includes('omzet') || s.includes('verkoop')) return 'OPBRENGSTEN';
+  if (s === 'expense' || s.startsWith('uitg') || s.startsWith('kost') || s.includes('kosten')) return 'KOSTEN';
+
+  // Nederlandse vaste waarden
+  if (s.startsWith('pass')) return 'PASSIVA';
+  if (s.startsWith('kost')) return 'KOSTEN';
+  if (s.startsWith('opbr')) return 'OPBRENGSTEN';
+
+  // Als iemand al exact PASSIVA/KOSTEN/OPBRENGSTEN opgeslagen heeft (maar met andere casing)
+  if (s === 'passiva') return 'PASSIVA';
+  if (s === 'kosten') return 'KOSTEN';
+  if (s === 'opbrengsten') return 'OPBRENGSTEN';
+
+  // Fallback: geef de originele string terug (uppercased) zodat het niet stil kapot gaat.
+  return s.toUpperCase();
 }
+
 
 
 function getCategoriesFromSheet() {
@@ -329,8 +344,8 @@ function populateCategorySelect() {
   const typeSelect = document.getElementById('type');
   if (!categorySelect || !typeSelect) return;
 
-  // Bepaal huidig type (income of expense)
-  const currentType = typeSelect.value === 'expense' ? 'uitgave' : 'inkomst';
+  // Bepaal huidig type (PASSIVA / KOSTEN / OPBRENGSTEN)
+  const currentType = normalizeCategoryType(typeSelect.value);
 
   // 1) Probeer categorieën te halen uit het bewerkbare Categorieën-blad (localStorage sheet HTML)
   // 2) Val terug op settings (voor compatibiliteit)
@@ -726,7 +741,8 @@ function txTotals(tx) {
 function fillCategorySelect(selectEl, typeKey) {
   if (!selectEl) return;
   const categories = (currentSettings && Array.isArray(currentSettings.categories)) ? currentSettings.categories : [];
-  const filtered = categories.filter((c) => c && c.type === typeKey);
+  const key = normalizeCategoryType(typeKey);
+  const filtered = categories.filter((c) => c && normalizeCategoryType(c.type) === key);
   selectEl.innerHTML = '';
   const emptyOpt = document.createElement('option');
   emptyOpt.value = '';
@@ -841,7 +857,7 @@ function renderTxDrawer() {
 
   const catSelect = document.getElementById('txDrawerCategory');
   if (catSelect) {
-    const typeKey = (drawerTx.type === 'expense') ? 'uitgave' : 'inkomst';
+    const typeKey = normalizeCategoryType(drawerTx.type);
     fillCategorySelect(catSelect, typeKey);
     catSelect.value = drawerTx.category || '';
   }
@@ -1245,15 +1261,17 @@ function enhanceCategoryTypeDropdown(root) {
     td.removeAttribute('contenteditable');
     // If select already exists, do nothing.
     if (td.querySelector('select')) return;
-    const current = normalizeCategoryType((td.textContent || '').trim()) || 'uitgave';
+    const current = normalizeCategoryType((td.textContent || '').trim()) || 'KOSTEN';
     td.textContent = '';
     const sel = document.createElement('select');
     sel.className = 'cell-select';
     const opt1 = document.createElement('option');
-    opt1.value = 'inkomst'; opt1.textContent = 'inkomst';
+    opt1.value = 'PASSIVA'; opt1.textContent = 'PASSIVA';
     const opt2 = document.createElement('option');
-    opt2.value = 'uitgave'; opt2.textContent = 'uitgave';
-    sel.appendChild(opt1); sel.appendChild(opt2);
+    opt2.value = 'KOSTEN'; opt2.textContent = 'KOSTEN';
+    const opt3 = document.createElement('option');
+    opt3.value = 'OPBRENGSTEN'; opt3.textContent = 'OPBRENGSTEN';
+    sel.appendChild(opt1); sel.appendChild(opt2); sel.appendChild(opt3);
     sel.value = current;
     td.appendChild(sel);
   };
@@ -1304,11 +1322,13 @@ function addRowToTable(table) {
     const sel = document.createElement('select');
     sel.className = 'cell-select';
     const opt1 = document.createElement('option');
-    opt1.value = 'inkomst'; opt1.textContent = 'inkomst';
+    opt1.value = 'PASSIVA'; opt1.textContent = 'PASSIVA';
     const opt2 = document.createElement('option');
-    opt2.value = 'uitgave'; opt2.textContent = 'uitgave';
-    sel.appendChild(opt1); sel.appendChild(opt2);
-    sel.value = 'uitgave';
+    opt2.value = 'KOSTEN'; opt2.textContent = 'KOSTEN';
+    const opt3 = document.createElement('option');
+    opt3.value = 'OPBRENGSTEN'; opt3.textContent = 'OPBRENGSTEN';
+    sel.appendChild(opt1); sel.appendChild(opt2); sel.appendChild(opt3);
+    sel.value = 'KOSTEN';
     td.appendChild(sel);
   } else {
     td.setAttribute('contenteditable', 'true');
