@@ -1,4 +1,9 @@
 
+// --- Globale UI state
+let drawerTx = null;
+let drawerEditMode = false;
+const bookingIndexById = new Map();
+
 // --- Pure frontend storage shim (vervangt de backend API) ---
 (function () {
   const LS = {
@@ -586,6 +591,7 @@ function renderTable(transactions) {
     row.addEventListener('click', () => openTxDrawer(tx));
 
     // Boeking (Jortt-achtig)
+    bookingIndexById.set(tx.id, i);
     const bookingCell = document.createElement('td');
     bookingCell.textContent = `Boeking ${i} ${tx.type === 'expense' ? 'Kosten' : 'Opbrengsten'}`;
     row.appendChild(bookingCell);
@@ -637,7 +643,10 @@ function openTxDrawer(tx, opts = {}) {
 
   const title = document.getElementById('txDrawerTitle');
   const subtitle = document.getElementById('txDrawerSubtitle');
-  if (title) title.textContent = 'Boeking ' + (tx.id ? String(tx.id).slice(-4) : '');
+  if (title) {
+    const nr = bookingIndexById.get(tx.id);
+    title.textContent = 'Boeking ' + (nr ? String(nr) : (tx.id ? String(tx.id).slice(-4) : ''));
+  }
   if (subtitle) subtitle.textContent = (tx.type === 'expense' ? 'Kosten' : 'Opbrengsten') + ' • ' + (tx.description || '');
 
   renderTxDrawer();
