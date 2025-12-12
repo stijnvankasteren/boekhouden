@@ -356,14 +356,15 @@ function renderTable(transactions) {
 
     // VAT rate column (as percentage) next to category
     const vatRateCell = document.createElement('td');
+    // Btw-percentage per transactie wordt opgeslagen als "21" / "9" / "0" (dus al in procenten).
     const txVatRate = Number(tx.vatRate ?? tx.vat_rate ?? 0) || 0;
-    vatRateCell.textContent = txVatRate ? String(Math.round(txVatRate * 100)) + '%' : '0%';
+    vatRateCell.textContent = String(txVatRate) + '%';
     vatRateCell.style.textAlign = 'right';
     row.appendChild(vatRateCell);
 
     const amountExclCell = document.createElement('td');
     const baseAmount = Number(tx.amount) || 0;
-    const vatAmount = baseAmount * txVatRate;
+    const vatAmount = baseAmount * (txVatRate / 100);
     const amountIncl = baseAmount + vatAmount;
 
     amountExclCell.textContent = formatCurrency(baseAmount);
