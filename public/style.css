@@ -521,7 +521,8 @@ th {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  z-index: 50;
+  /* Moet boven de drawer (z-index: 2000) liggen */
+  z-index: 3000;
 }
 
 .modal {
