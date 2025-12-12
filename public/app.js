@@ -1256,6 +1256,27 @@ function makeSheetEditable(root) {
 function enhanceSheetUi(root) {
   if (!root) return;
 
+  // Buttons like "+ Categorie toevoegen"
+  root.querySelectorAll('[data-action="add-row"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.getAttribute('data-target');
+      let table = null;
+
+      if (targetId) {
+        table = root.querySelector('#' + CSS.escape(targetId));
+      }
+
+      // Fallback: nearest section table
+      if (!table) {
+        const section = btn.closest('section') || btn.closest('.sheet-section') || btn.closest('.sheet-card');
+        if (section) table = section.querySelector('table');
+      }
+
+      if (table) addRowToTable(table);
+    });
+  });
+}
+
 function enhanceCategoryTypeDropdown(root) {
   const table = root.querySelector('#category-table');
   if (!table) return;
@@ -1288,27 +1309,7 @@ function enhanceCategoryTypeDropdown(root) {
 }
 
 
-  root.querySelectorAll('[data-action="add-row"]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const targetId = btn.getAttribute('data-target');
-      let table = null;
-
-      if (targetId) {
-        table = root.querySelector('#' + targetId);
-      }
-      if (!table) {
-        const section = btn.closest('.sheet-section');
-        if (section) {
-          table = section.querySelector('table');
-        }
-      }
-
-      if (table) {
-        addRowToTable(table);
-      }
-    });
-  });
-}
+  
 
 function addRowToTable(table) {
   if (!table) return;
