@@ -338,6 +338,8 @@ function renderTable(transactions) {
 
   for (const tx of transactions) {
     const row = document.createElement('tr');
+    row.classList.add('tx-row-click');
+    row.addEventListener('click', () => openTxDrawer(tx));
 
     const dateCell = document.createElement('td');
     dateCell.textContent = tx.date;
@@ -395,7 +397,7 @@ function renderTable(transactions) {
     editBtn.type = 'button';
     editBtn.textContent = '✏️';
     editBtn.title = 'Transactie bewerken';
-    editBtn.addEventListener('click', () => openEditModal(tx));
+    editBtn.addEventListener('click', (ev) => { ev.stopPropagation(); openTxDrawer(tx, {startInEdit:true}); });
     stack.appendChild(editBtn);
 
     // Attachment (paperclip) button
@@ -404,7 +406,7 @@ function renderTable(transactions) {
     attBtn.type = 'button';
     attBtn.textContent = '📎';
     attBtn.title = tx.attachmentData ? 'Bijlage bekijken' : 'Bon/factuur koppelen';
-    attBtn.addEventListener('click', () => {
+    attBtn.addEventListener('click', (ev) => { ev.stopPropagation();
       if (tx.attachmentData) {
         // Open in a new tab/window (data URL)
         window.open(tx.attachmentData, '_blank', 'noopener');
@@ -424,7 +426,7 @@ function renderTable(transactions) {
     delBtn.style.background = '#ef4444';
     delBtn.style.fontSize = '0.75rem';
     delBtn.style.padding = '0.25rem 0.5rem';
-    delBtn.addEventListener('click', async () => {
+    delBtn.addEventListener('click', async (ev) => { ev.stopPropagation();
       if (!confirm('Transactie verwijderen?')) return;
       await fetch('/api/transactions/' + encodeURIComponent(tx.id), {
         method: 'DELETE',
@@ -438,6 +440,131 @@ function renderTable(transactions) {
 
     tbody.appendChild(row);
   }
+}
+
+
+// ---- Drawer (Jortt-achtige) ----
+let drawerTx = null;
+let drawerEditMode = false;
+
+function openTxDrawer(tx, opts = {}) {
+  drawerTx = tx;
+  drawerEditMode = !!opts.startInEdit;
+
+  const overlay = document.getElementById('txDrawer');
+  if (!overlay) return;
+
+  overlay.classList.remove('hidden');
+  overlay.setAttribute('aria-hidden', 'false');
+
+  const title = document.getElementById('txDrawerTitle');
+  const subtitle = document.getElementById('txDrawerSubtitle');
+  if (title) title.textContent = 'Boeking ' + (tx.id ? String(tx.id).slice(-4) : '');
+  if (subtitle) subtitle.textContent = (tx.type === 'expense' ? 'Kosten' : 'Opbrengsten') + ' • ' + (tx.description || '');
+
+  renderTxDrawer();
+}
+
+function closeTxDrawer() {
+  const overlay = document.getElementById('txDrawer');
+  if (!overlay) return;
+  overlay.classList.add('hidden');
+  overlay.setAttribute('aria-hidden', 'true');
+  drawerTx = null;
+  drawerEditMode = false;
+}
+
+function setDrawerMode(editMode) {
+  drawerEditMode = !!editMode;
+  renderTxDrawer();
+}
+
+function txTotals(tx) {
+  const amountExcl = Number(tx.amount) || 0;
+  const vatRate = Number(tx.vatRate) || 0;
+  const vatAmount = amountExcl * (vatRate / 100);
+  const amountIncl = amountExcl + vatAmount;
+  return { amountExcl, vatRate, vatAmount, amountIncl };
+}
+
+function fillCategorySelect(selectEl, typeKey) {
+  if (!selectEl) return;
+  const categories = (currentSettings && Array.isArray(currentSettings.categories)) ? currentSettings.categories : [];
+  const filtered = categories.filter((c) => c && c.type === typeKey);
+  selectEl.innerHTML = '';
+  const emptyOpt = document.createElement('option');
+  emptyOpt.value = '';
+  emptyOpt.textContent = '- kies -';
+  selectEl.appendChild(emptyOpt);
+  filtered.forEach((c) => {
+    const opt = document.createElement('option');
+    opt.value = c.name;
+    opt.textContent = c.name;
+    selectEl.appendChild(opt);
+  });
+}
+
+function renderTxDrawer() {
+  if (!drawerTx) return;
+
+  const viewEl = document.getElementById('txDrawerView');
+  const formEl = document.getElementById('txDrawerForm');
+
+  if (viewEl) viewEl.classList.toggle('hidden', drawerEditMode);
+  if (formEl) formEl.classList.toggle('hidden', !drawerEditMode);
+
+  const { amountExcl, vatRate, vatAmount, amountIncl } = txTotals(drawerTx);
+
+  if (!drawerEditMode) {
+    document.getElementById('txViewCategory')?.replaceChildren(document.createTextNode(drawerTx.category || '-'));
+    document.getElementById('txViewDesc')?.replaceChildren(document.createTextNode(drawerTx.description || '-'));
+    document.getElementById('txViewDate')?.replaceChildren(document.createTextNode(drawerTx.date || '-'));
+    document.getElementById('txViewVat')?.replaceChildren(document.createTextNode(String(vatRate || 0) + '%'));
+    document.getElementById('txViewExcl')?.replaceChildren(document.createTextNode(formatCurrency(amountExcl)));
+    document.getElementById('txViewVatAmt')?.replaceChildren(document.createTextNode(formatCurrency(vatAmount)));
+    document.getElementById('txViewIncl')?.replaceChildren(document.createTextNode(formatCurrency(amountIncl)));
+
+    const att = document.getElementById('txViewAttachment');
+    if (att) {
+      att.innerHTML = '';
+      if (drawerTx.attachmentData) {
+        if (String(drawerTx.attachmentData).startsWith('data:image')) {
+          const img = document.createElement('img');
+          img.src = drawerTx.attachmentData;
+          img.alt = drawerTx.attachmentName || 'Bon';
+          att.appendChild(img);
+        } else {
+          const a = document.createElement('a');
+          a.href = drawerTx.attachmentData;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = drawerTx.attachmentName || 'Bijlage openen';
+          att.appendChild(a);
+        }
+      } else {
+        att.textContent = 'Geen bon';
+        att.classList.add('muted');
+      }
+    }
+    return;
+  }
+
+  document.getElementById('txDrawerId').value = drawerTx.id || '';
+  document.getElementById('txDrawerDate').value = drawerTx.date || '';
+  document.getElementById('txDrawerDesc').value = drawerTx.description || '';
+  document.getElementById('txDrawerType').value = drawerTx.type === 'expense' ? 'expense' : 'income';
+  document.getElementById('txDrawerAmount').value = String(Number(drawerTx.amount) || 0);
+  document.getElementById('txDrawerVat').value = String(Number(drawerTx.vatRate ?? 0) || 0);
+
+  const catSelect = document.getElementById('txDrawerCategory');
+  if (catSelect) {
+    const typeKey = (drawerTx.type === 'expense') ? 'uitgave' : 'inkomst';
+    fillCategorySelect(catSelect, typeKey);
+    catSelect.value = drawerTx.category || '';
+  }
+
+  const attInfo = document.getElementById('txDrawerAttachmentInfo');
+  if (attInfo) attInfo.textContent = drawerTx.attachmentName ? ('Gekoppeld: ' + drawerTx.attachmentName) : 'Geen bon';
 }
 
 function openEditModal(tx) {
@@ -1388,7 +1515,123 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- Attachment wiring (paperclip) ---
+      // --- Drawer wiring (Jortt-achtige detail/edit) ---
+    const drawerClose = document.getElementById('txDrawerClose');
+    const drawerOverlay = document.getElementById('txDrawer');
+    const drawerEditBtn = document.getElementById('txDrawerEditBtn');
+    const drawerAttachBtn = document.getElementById('txDrawerAttachBtn');
+    const drawerDeleteBtn = document.getElementById('txDrawerDeleteBtn');
+    const drawerCancel = document.getElementById('txDrawerCancel');
+    const drawerForm = document.getElementById('txDrawerForm');
+    const drop = document.getElementById('txDrawerDrop');
+    const selectFileBtn = document.getElementById('txDrawerSelectFile');
+
+    if (drawerClose) drawerClose.addEventListener('click', closeTxDrawer);
+    if (drawerOverlay) {
+      drawerOverlay.addEventListener('click', (ev) => {
+        if (ev.target === drawerOverlay) closeTxDrawer();
+      });
+    }
+    if (drawerEditBtn) drawerEditBtn.addEventListener('click', () => setDrawerMode(true));
+    if (drawerCancel) drawerCancel.addEventListener('click', () => setDrawerMode(false));
+
+    if (drawerAttachBtn) {
+      drawerAttachBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        if (!drawerTx) return;
+        if (drawerTx.attachmentData) {
+          window.open(drawerTx.attachmentData, '_blank', 'noopener');
+          return;
+        }
+        const input = document.getElementById('attachmentInput');
+        if (!input) return;
+        attachmentTxId = drawerTx.id;
+        input.value = '';
+        input.click();
+      });
+    }
+
+    if (drawerDeleteBtn) {
+      drawerDeleteBtn.addEventListener('click', async () => {
+        if (!drawerTx) return;
+        if (!confirm('Weet je zeker dat je deze transactie wilt verwijderen?')) return;
+        await fetch('/api/transactions/' + encodeURIComponent(drawerTx.id), { method: 'DELETE' });
+        closeTxDrawer();
+        await reload();
+      });
+    }
+
+    if (selectFileBtn) {
+      selectFileBtn.addEventListener('click', () => {
+        if (!drawerTx) return;
+        const input = document.getElementById('attachmentInput');
+        if (!input) return;
+        attachmentTxId = drawerTx.id;
+        input.value = '';
+        input.click();
+      });
+    }
+
+    if (drop) {
+      const onDrag = (e) => { e.preventDefault(); drop.classList.add('dragover'); };
+      const onLeave = (e) => { e.preventDefault(); drop.classList.remove('dragover'); };
+      drop.addEventListener('dragover', onDrag);
+      drop.addEventListener('dragenter', onDrag);
+      drop.addEventListener('dragleave', onLeave);
+      drop.addEventListener('drop', (e) => {
+        e.preventDefault();
+        drop.classList.remove('dragover');
+        if (!drawerTx) return;
+        const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (!file) return;
+        const input = document.getElementById('attachmentInput');
+        if (!input) return;
+        attachmentTxId = drawerTx.id;
+        // put file into input via DataTransfer
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change'));
+      });
+    }
+
+    if (drawerForm) {
+      drawerForm.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        if (!drawerTx) return;
+
+        const msg = document.getElementById('txDrawerMsg');
+        if (msg) { msg.textContent = ''; msg.className = 'message'; }
+
+        const payload = {
+          date: document.getElementById('txDrawerDate')?.value,
+          description: document.getElementById('txDrawerDesc')?.value,
+          type: document.getElementById('txDrawerType')?.value,
+          amount: document.getElementById('txDrawerAmount')?.value,
+          vatRate: document.getElementById('txDrawerVat')?.value,
+          category: document.getElementById('txDrawerCategory')?.value,
+        };
+
+        try {
+          const res = await fetch('/api/transactions/' + encodeURIComponent(drawerTx.id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error('Fout bij opslaan');
+          await reload();
+          // refresh drawerTx with updated tx from lastFilteredTransactions if present
+          const updated = (lastFilteredTransactions || []).find((t) => t.id === drawerTx.id);
+          drawerTx = updated || drawerTx;
+          setDrawerMode(false);
+        } catch (e) {
+          console.error(e);
+          if (msg) { msg.textContent = 'Kon transactie niet opslaan.'; msg.className = 'message error'; }
+        }
+      });
+    }
+
+// --- Attachment wiring (paperclip) ---
   const attachmentInput = document.getElementById('attachmentInput');
   if (attachmentInput) {
     attachmentInput.addEventListener('change', async () => {
