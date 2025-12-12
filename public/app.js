@@ -328,16 +328,20 @@ function getCategoriesFromSheet() {
     rows.forEach((tr) => {
       const tds = tr.querySelectorAll('td');
       if (!tds || tds.length < 2) return;
-      const name = (tds[0].textContent || '').trim();
-      const typeRaw = (tds[1].querySelector && tds[1].querySelector('select')) ? ((tds[1].querySelector('select').value || '').trim()) : ((tds[1].textContent || '').trim());
+
+      const name = ((tds[0].textContent || '').trim());
       if (!name) return;
-      out.push({ name, type: normalizeCategoryType(typeRaw) });
+
+      const sel = tds[1].querySelector ? tds[1].querySelector('select') : null;
+      const typeRaw = sel ? (sel.value || '') : (tds[1].textContent || '');
+      out.push({ name, type: normalizeCategoryType((typeRaw || '').trim()) });
     });
     return out;
   } catch (e) {
     return [];
   }
 }
+
 
 function populateCategorySelect() {
   const categorySelect = document.getElementById('category');
@@ -1314,31 +1318,43 @@ function addRowToTable(table) {
   const tr = document.createElement('tr');
 
   for (let i = 0; i < colCount; i++) {
-  const td = document.createElement('td');
+    const td = document.createElement('td');
 
-  // Category type column uses a dropdown.
-  if (table && table.id === 'category-table' && i === 1) {
-    td.removeAttribute('contenteditable');
-    const sel = document.createElement('select');
-    sel.className = 'cell-select';
-    const opt1 = document.createElement('option');
-    opt1.value = 'PASSIVA'; opt1.textContent = 'PASSIVA';
-    const opt2 = document.createElement('option');
-    opt2.value = 'KOSTEN'; opt2.textContent = 'KOSTEN';
-    const opt3 = document.createElement('option');
-    opt3.value = 'OPBRENGSTEN'; opt3.textContent = 'OPBRENGSTEN';
-    sel.appendChild(opt1); sel.appendChild(opt2); sel.appendChild(opt3);
-    sel.value = 'KOSTEN';
-    td.appendChild(sel);
-  } else {
-    td.setAttribute('contenteditable', 'true');
+    // Category type column uses a dropdown.
+    if (table.id === 'category-table' && i === 1) {
+      td.removeAttribute('contenteditable');
+      const sel = document.createElement('select');
+      sel.className = 'cell-select';
+
+      const opt1 = document.createElement('option');
+      opt1.value = 'PASSIVA'; opt1.textContent = 'PASSIVA';
+      const opt2 = document.createElement('option');
+      opt2.value = 'KOSTEN'; opt2.textContent = 'KOSTEN';
+      const opt3 = document.createElement('option');
+      opt3.value = 'OPBRENGSTEN'; opt3.textContent = 'OPBRENGSTEN';
+
+      sel.appendChild(opt1);
+      sel.appendChild(opt2);
+      sel.appendChild(opt3);
+
+      sel.value = 'KOSTEN';
+      td.appendChild(sel);
+    } else {
+      td.setAttribute('contenteditable', 'true');
+    }
+
+    tr.appendChild(td);
   }
 
-  tr.appendChild(td);
+  tbody.appendChild(tr);
+
+  // Als we een rij toevoegen in de categorieën-tabel, zorg dan meteen dat
+  // bestaande type-cellen een dropdown zijn.
+  if (table.id === 'category-table') {
+    enhanceCategoryTypeDropdown(document);
+  }
 }
 
-  tbody.appendChild(tr);
-}
 
 async function loadSheetFromServer(view) {
   if (sheetCache[view]) return sheetCache[view];
