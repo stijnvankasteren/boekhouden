@@ -23,7 +23,7 @@
     <button type="button" class="nav-link" data-view="income">Verkopen &amp; Inkomsten</button>
     <button type="button" class="nav-link" data-view="expense">Inkopen &amp; Uitgaven</button>
     <button type="button" class="nav-link" data-view="categories">Categorieën</button>
-    <button type="button" class="nav-link" data-view="accounts">Rekeningen</button>
+    <button type="button" class="nav-link" data-view="accounts">Betaalmethoden</button>
     <button type="button" class="nav-link" data-view="beginbalans">Beginbalans</button>
     <button type="button" class="nav-link" data-view="relations">Relaties</button>
     <button type="button" class="nav-link" data-view="wvbalans">W&amp;V en Balans</button>
@@ -255,8 +255,12 @@
         </div>
 
         <div class="drawer-card">
-          <div class="card-title">Mogelijke koppelingen</div>
-          <div class="muted">Binnenkort: betaalrekening/kas koppelen (placeholder).</div>
+          <div class="card-title">Betaalmethode</div>
+          <div class="muted">Kies een betaalmethode (bijv. bankrekening of kas).</div>
+          <div class="field" style="margin-top:10px">
+            <label>Gekoppelde betaalmethode</label>
+            <div id="txViewPaymentMethod" class="readonly-value">-</div>
+          </div>
         </div>
       </div>
 
@@ -370,7 +374,7 @@
         <button type="button" class="nav-chip" data-goto-view="wvbalans">Winst &amp; verlies</button>
         <button type="button" class="nav-chip" data-goto-view="btw">Btw-overzicht</button>
         <button type="button" class="nav-chip" data-goto-view="categories">Categorieën beheren</button>
-        <button type="button" class="nav-chip" data-goto-view="accounts">Rekeningen beheren</button>
+        <button type="button" class="nav-chip" data-goto-view="accounts">Betaalmethoden beheren</button>
         <button type="button" class="nav-chip" data-goto-view="relations">Relaties beheren</button>
       </div>
     </div>
@@ -502,7 +506,7 @@
   </template>
 
   <template id="tpl-accounts">
-    <h3 class="sheet-title">Rekeningen beheren</h3>
+    <h3 class="sheet-title">Betaalmethoden beheren</h3>
     <div class="sheet-section">
       <p class="sheet-note">
         Leg hier de rekeningen vast die je gebruikt in je administratie, zoals bankrekeningen,

@@ -1,3 +1,152 @@
+
+// --- Pure frontend storage shim (vervangt de backend API) ---
+(function () {
+  const LS = {
+    tx: 'boekhouden_transactions_v1',
+    settings: 'boekhouden_settings_v1',
+    sheetPrefix: 'boekhouden_sheet_',
+  };
+
+  function readJSON(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      return JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
+  }
+  function writeJSON(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function calcSummary(transactions) {
+    let totalIncome = 0;
+    let totalExpenses = 0;
+    for (const t of transactions || []) {
+      const amt = Number(t.amount) || 0;
+      if (t.type === 'expense') totalExpenses += amt;
+      else totalIncome += amt;
+    }
+    return { totalIncome, totalExpenses, result: totalIncome - totalExpenses };
+  }
+
+  function uid() {
+    // simpele id (voldoende voor lokaal gebruik)
+    return (Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  }
+
+  function defaultSheetHtml(view) {
+    const tpl = document.getElementById('tpl-' + view);
+    if (!tpl) return null;
+    return tpl.innerHTML;
+  }
+
+  // Intercept fetch calls to /api/*
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async function (input, init) {
+    const url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+    const method = (init && init.method ? init.method : 'GET').toUpperCase();
+
+    if (!url.startsWith('/api/')) {
+      return originalFetch(input, init);
+    }
+
+    const jsonResponse = (data, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
+
+    // SETTINGS
+    if (url === '/api/settings') {
+      if (method === 'GET') {
+        const settings = readJSON(LS.settings, {});
+        return jsonResponse(settings);
+      }
+      if (method === 'POST' || method === 'PUT') {
+        const body = init && init.body ? JSON.parse(init.body) : {};
+        const current = readJSON(LS.settings, {});
+        const merged = { ...current, ...body };
+        writeJSON(LS.settings, merged);
+        return jsonResponse({ ok: true, settings: merged });
+      }
+    }
+
+    // TRANSACTIONS
+    if (url === '/api/transactions' && method === 'GET') {
+      const transactions = readJSON(LS.tx, []);
+      return jsonResponse({ transactions, summary: calcSummary(transactions) });
+    }
+
+    if (url === '/api/transactions' && method === 'POST') {
+      const body = init && init.body ? JSON.parse(init.body) : {};
+      const transactions = readJSON(LS.tx, []);
+      const tx = {
+        id: uid(),
+        date: body.date || '',
+        description: body.description || '',
+        amount: Number(body.amount) || 0,
+        vatRate: Number(body.vatRate ?? 0) || 0,
+        type: body.type === 'expense' ? 'expense' : 'income',
+        category: body.category || '',
+        paymentMethod: body.paymentMethod || '',
+        attachmentName: body.attachmentName,
+        attachmentData: body.attachmentData,
+      };
+      transactions.unshift(tx);
+      writeJSON(LS.tx, transactions);
+      return jsonResponse({ ok: true, transaction: tx, summary: calcSummary(transactions) }, 201);
+    }
+
+    const txIdMatch = url.match(/^\/api\/transactions\/([^/?#]+)$/);
+    if (txIdMatch) {
+      const id = decodeURIComponent(txIdMatch[1]);
+      const transactions = readJSON(LS.tx, []);
+
+      if (method === 'DELETE') {
+        const next = transactions.filter((t) => t.id !== id);
+        writeJSON(LS.tx, next);
+        return jsonResponse({ ok: true, summary: calcSummary(next) });
+      }
+
+      if (method === 'PUT' || method === 'PATCH') {
+        const body = init && init.body ? JSON.parse(init.body) : {};
+        const next = transactions.map((t) => {
+          if (t.id !== id) return t;
+          return {
+            ...t,
+            ...body,
+            amount: Number(body.amount ?? t.amount) || 0,
+            vatRate: Number(body.vatRate ?? t.vatRate) || 0,
+          };
+        });
+        writeJSON(LS.tx, next);
+        return jsonResponse({ ok: true, summary: calcSummary(next) });
+      }
+    }
+
+    // SHEETS
+    const sheetMatch = url.match(/^\/api\/sheets\/([^/?#]+)$/);
+    if (sheetMatch) {
+      const view = decodeURIComponent(sheetMatch[1]);
+      const key = LS.sheetPrefix + view;
+
+      if (method === 'GET') {
+        const html = localStorage.getItem(key) || defaultSheetHtml(view);
+        return jsonResponse({ html: html || '' });
+      }
+
+      if (method === 'PUT' || method === 'POST') {
+        const body = init && init.body ? JSON.parse(init.body) : {};
+        const html = body.html || '';
+        localStorage.setItem(key, html);
+        return jsonResponse({ ok: true });
+      }
+    }
+
+    return jsonResponse({ error: 'Not found' }, 404);
+  };
+})();
+
+
 let currentView = 'dashboard';
 let lastData = {
   transactions: [],
@@ -533,6 +682,47 @@ function fillCategorySelect(selectEl, typeKey) {
   });
 }
 
+
+function extractPaymentMethodsFromAccountsHtml(html) {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const table = doc.getElementById('accounts-table');
+    if (!table) return [];
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const names = rows
+      .map((tr) => (tr.querySelector('td') ? tr.querySelector('td').textContent.trim() : ''))
+      .filter((v) => v && v !== '-');
+    // unieke waarden
+    return Array.from(new Set(names));
+  } catch {
+    return [];
+  }
+}
+
+function getPaymentMethods() {
+  // Vanuit opgeslagen sheet (accounts) of de template-default
+  const saved = localStorage.getItem('boekhouden_sheet_accounts');
+  const html = saved || document.getElementById('tpl-accounts')?.innerHTML || '';
+  return extractPaymentMethodsFromAccountsHtml(html);
+}
+
+function fillPaymentMethodSelect(selectEl) {
+  if (!selectEl) return;
+  const current = selectEl.value || '';
+  selectEl.innerHTML = '<option value="">-- Kies betaalmethode --</option>';
+  const methods = getPaymentMethods();
+  for (const m of methods) {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = m;
+    selectEl.appendChild(opt);
+  }
+  // herstel huidige selectie indien mogelijk
+  if (current) selectEl.value = current;
+}
+
+
 function renderTxDrawer() {
   if (!drawerTx) return;
 
@@ -546,6 +736,7 @@ function renderTxDrawer() {
 
   if (!drawerEditMode) {
     document.getElementById('txViewCategory')?.replaceChildren(document.createTextNode(drawerTx.category || '-'));
+    document.getElementById('txViewPaymentMethod')?.replaceChildren(document.createTextNode(drawerTx.paymentMethod || '-'));
     document.getElementById('txViewDesc')?.replaceChildren(document.createTextNode(drawerTx.description || '-'));
     document.getElementById('txViewDate')?.replaceChildren(document.createTextNode(drawerTx.date || '-'));
     document.getElementById('txViewVat')?.replaceChildren(document.createTextNode(String(vatRate || 0) + '%'));
@@ -595,6 +786,12 @@ function renderTxDrawer() {
     const typeKey = (drawerTx.type === 'expense') ? 'uitgave' : 'inkomst';
     fillCategorySelect(catSelect, typeKey);
     catSelect.value = drawerTx.category || '';
+  }
+
+  const pmSelect = document.getElementById('txDrawerPaymentMethod');
+  if (pmSelect) {
+    fillPaymentMethodSelect(pmSelect);
+    pmSelect.value = drawerTx.paymentMethod || '';
   }
 
   const attInfo = document.getElementById('txDrawerAttachmentInfo');
@@ -1256,9 +1453,9 @@ function applyView() {
       txs = [];
       break;
     case 'accounts':
-      rightTitle.textContent = 'Rekeningen';
+      rightTitle.textContent = 'Betaalmethoden';
       rightCaption.textContent =
-        'Beheer hier je rekeningen zoals in het Excel-tabblad.';
+        'Beheer hier je betaalmethoden zoals in het Excel-tabblad.';
       txs = [];
       break;
     case 'beginbalans':
@@ -1644,6 +1841,7 @@ window.addEventListener('DOMContentLoaded', () => {
           amount: document.getElementById('txDrawerAmount')?.value,
           vatRate: document.getElementById('txDrawerVat')?.value,
           category: document.getElementById('txDrawerCategory')?.value,
+          paymentMethod: document.getElementById('txDrawerPaymentMethod')?.value,
         };
 
         try {
