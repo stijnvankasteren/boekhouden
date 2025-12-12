@@ -354,9 +354,15 @@ function renderTable(transactions) {
     catCell.textContent = tx.category ? tx.category : '-';
     row.appendChild(catCell);
 
+    // VAT rate column (as percentage) next to category
+    const vatRateCell = document.createElement('td');
+    const txVatRate = Number(tx.vatRate ?? tx.vat_rate ?? 0) || 0;
+    vatRateCell.textContent = txVatRate ? String(Math.round(txVatRate * 100)) + '%' : '0%';
+    vatRateCell.style.textAlign = 'right';
+    row.appendChild(vatRateCell);
+
     const amountExclCell = document.createElement('td');
     const baseAmount = Number(tx.amount) || 0;
-    const txVatRate = Number(tx.vatRate ?? tx.vat_rate ?? 0) || 0;
     const vatAmount = baseAmount * txVatRate;
     const amountIncl = baseAmount + vatAmount;
 
