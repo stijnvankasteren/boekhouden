@@ -25,13 +25,30 @@ const bookingIndexById = new Map();
     localStorage.setItem(key, JSON.stringify(value));
   }
 
+  // Canonicaliseer transactietype naar vaste waarden: PASSIVA / KOSTEN / OPBRENGSTEN
+  function canonType(t) {
+    const s = (t || '').toString().trim().toLowerCase();
+    if (!s) return '';
+    if (s === 'income' || s.startsWith('ink') || s.includes('omzet') || s.includes('verkoop')) return 'OPBRENGSTEN';
+    if (s === 'expense' || s.startsWith('uitg') || s.startsWith('kost') || s.includes('kosten')) return 'KOSTEN';
+    if (s.startsWith('pass')) return 'PASSIVA';
+    if (s.startsWith('kost')) return 'KOSTEN';
+    if (s.startsWith('opbr')) return 'OPBRENGSTEN';
+    if (s === 'passiva') return 'PASSIVA';
+    if (s === 'kosten') return 'KOSTEN';
+    if (s === 'opbrengsten') return 'OPBRENGSTEN';
+    return s.toUpperCase();
+  }
+
   function calcSummary(transactions) {
     let totalIncome = 0;
     let totalExpenses = 0;
     for (const t of transactions || []) {
       const amt = Number(t.amount) || 0;
-      if (t.type === 'expense') totalExpenses += amt;
-      else totalIncome += amt;
+      const tt = canonType(t.type);
+      if (tt === 'KOSTEN') totalExpenses += amt;
+      else if (tt === 'OPBRENGSTEN') totalIncome += amt;
+      // PASSIVA telt niet mee in W/V
     }
     return { totalIncome, totalExpenses, result: totalIncome - totalExpenses };
   }
@@ -77,7 +94,20 @@ const bookingIndexById = new Map();
 
     // TRANSACTIONS
     if (url === '/api/transactions' && method === 'GET') {
-      const transactions = readJSON(LS.tx, []);
+      let transactions = readJSON(LS.tx, []);
+      // Migratie: zet legacy income/expense om naar OPBRENGSTEN/KOSTEN en schrijf terug.
+      let changed = false;
+      transactions = (transactions || []).map((t) => {
+        const tt = canonType(t && t.type);
+        if (t && tt && t.type !== tt) changed = true;
+        return {
+          ...(t || {}),
+          type: tt || (t && t.type) || '',
+          amount: Number(t && t.amount) || 0,
+          vatRate: Number(t && (t.vatRate ?? t.vat_rate ?? 0)) || 0,
+        };
+      });
+      if (changed) writeJSON(LS.tx, transactions);
       return jsonResponse({ transactions, summary: calcSummary(transactions) });
     }
 
@@ -90,7 +120,7 @@ const bookingIndexById = new Map();
         description: body.description || '',
         amount: Number(body.amount) || 0,
         vatRate: Number(body.vatRate ?? 0) || 0,
-        type: body.type === 'expense' ? 'expense' : 'income',
+        type: canonType(body.type) || 'KOSTEN',
         category: body.category || '',
         paymentMethod: body.paymentMethod || '',
         attachmentName: body.attachmentName,
@@ -119,6 +149,7 @@ const bookingIndexById = new Map();
           return {
             ...t,
             ...body,
+            type: body && Object.prototype.hasOwnProperty.call(body, 'type') ? (canonType(body.type) || t.type) : t.type,
             amount: Number(body.amount ?? t.amount) || 0,
             vatRate: Number(body.vatRate ?? t.vatRate) || 0,
           };
@@ -396,6 +427,14 @@ function normalizeCategoryType(t) {
 
   // Fallback: geef de originele string terug (uppercased) zodat het niet stil kapot gaat.
   return s.toUpperCase();
+}
+
+function txTypeLabel(t) {
+  const tt = normalizeCategoryType(t);
+  if (tt === 'KOSTEN') return 'Kosten';
+  if (tt === 'OPBRENGSTEN') return 'Opbrengsten';
+  if (tt === 'PASSIVA') return 'Passiva';
+  return 'Onbekend';
 }
 
 
@@ -740,13 +779,14 @@ function calculateClientSummary(list, settings) {
   let vatOnExpenses = 0;
   for (const tx of list || []) {
     const amount = Number(tx.amount) || 0;
-    if (tx.type === 'expense') {
+    const tt = normalizeCategoryType(tx.type);
+    if (tt === 'KOSTEN') {
       expenses += amount;
       if (vatRate > 0) {
         const vatPart = amount - amount / (1 + vatRate);
         vatOnExpenses += vatPart;
       }
-    } else {
+    } else if (tt === 'OPBRENGSTEN') {
       income += amount;
       if (vatRate > 0) {
         const vatPart = amount - amount / (1 + vatRate);
@@ -820,7 +860,7 @@ function renderTable(transactions) {
     // Boeking (Jortt-achtig)
     bookingIndexById.set(tx.id, i);
     const bookingCell = document.createElement('td');
-    bookingCell.textContent = `Boeking ${i} ${tx.type === 'expense' ? 'Kosten' : 'Opbrengsten'}`;
+    bookingCell.textContent = `Boeking ${i} ${txTypeLabel(tx.type)}`;
     row.appendChild(bookingCell);
 
     // Specifieke kosten (categorie)
@@ -874,7 +914,7 @@ function openTxDrawer(tx, opts = {}) {
     const nr = bookingIndexById.get(tx.id);
     title.textContent = 'Boeking ' + (nr ? String(nr) : (tx.id ? String(tx.id).slice(-4) : ''));
   }
-  if (subtitle) subtitle.textContent = (tx.type === 'expense' ? 'Kosten' : 'Opbrengsten') + ' • ' + (tx.description || '');
+  if (subtitle) subtitle.textContent = txTypeLabel(tx.type) + ' • ' + (tx.description || '');
 
   renderTxDrawer();
 }
@@ -903,9 +943,16 @@ function txTotals(tx) {
 
 function fillCategorySelect(selectEl, typeKey) {
   if (!selectEl) return;
-  const categories = (currentSettings && Array.isArray(currentSettings.categories)) ? currentSettings.categories : [];
   const key = normalizeCategoryType(typeKey);
-  const filtered = categories.filter((c) => c && normalizeCategoryType(c.type) === key);
+
+  let categories = Array.isArray(excelCategories) && excelCategories.length ? excelCategories : getCategoriesFromSheet();
+  if (!categories || !categories.length) {
+    categories = (currentSettings && Array.isArray(currentSettings.categories))
+      ? currentSettings.categories.map((c) => ({ name: c.name, type: normalizeCategoryType(c.type), notes: c.notes }))
+      : [];
+  }
+
+  const filtered = (categories || []).filter((c) => c && normalizeCategoryType(c.type) === key);
   selectEl.innerHTML = '';
   const emptyOpt = document.createElement('option');
   emptyOpt.value = '';
@@ -1014,7 +1061,7 @@ function renderTxDrawer() {
   document.getElementById('txDrawerId').value = drawerTx.id || '';
   document.getElementById('txDrawerDate').value = drawerTx.date || '';
   document.getElementById('txDrawerDesc').value = drawerTx.description || '';
-  document.getElementById('txDrawerType').value = drawerTx.type === 'expense' ? 'expense' : 'income';
+  document.getElementById('txDrawerType').value = normalizeCategoryType(drawerTx.type) || 'KOSTEN';
   document.getElementById('txDrawerAmount').value = String(Number(drawerTx.amount) || 0);
   document.getElementById('txDrawerVat').value = String(Number(drawerTx.vatRate ?? 0) || 0);
 
@@ -1055,7 +1102,7 @@ function openEditModal(tx) {
 
   if (dateEl) dateEl.value = tx.date || '';
   if (descEl) descEl.value = tx.description || '';
-  if (typeEl) typeEl.value = tx.type === 'expense' ? 'expense' : 'income';
+  if (typeEl) typeEl.value = normalizeCategoryType(tx.type) || 'KOSTEN';
   if (amountEl) amountEl.value = String(Number(tx.amount) || 0);
   if (vatEl) vatEl.value = String(Number(tx.vatRate ?? 0) || 0);
   if (catEl) catEl.value = tx.category || '';
@@ -1124,14 +1171,15 @@ function updateWvTable(summary) {
   for (const tx of lastFilteredTransactions || []) {
     const key = tx.category && tx.category.trim() ? tx.category.trim() : '-';
     if (!map.has(key)) {
-      map.set(key, { income: 0, expense: 0 });
+      map.set(key, { opbrengsten: 0, kosten: 0 });
     }
     const bucket = map.get(key);
     const amount = Number(tx.amount) || 0;
-    if (tx.type === 'expense') {
-      bucket.expense += amount;
-    } else {
-      bucket.income += amount;
+    const tt = normalizeCategoryType(tx.type);
+    if (tt === 'KOSTEN') {
+      bucket.kosten += amount;
+    } else if (tt === 'OPBRENGSTEN') {
+      bucket.opbrengsten += amount;
     }
   }
 
@@ -1147,11 +1195,11 @@ function updateWvTable(summary) {
     const tdProfit = document.createElement('td');
 
     tdName.textContent = name;
-    tdLoss.textContent = bucket.expense ? formatCurrency(bucket.expense) : '';
-    tdProfit.textContent = bucket.income ? formatCurrency(bucket.income) : '';
+    tdLoss.textContent = bucket.kosten ? formatCurrency(bucket.kosten) : '';
+    tdProfit.textContent = bucket.opbrengsten ? formatCurrency(bucket.opbrengsten) : '';
 
-    totalIncome += bucket.income;
-    totalExpenses += bucket.expense;
+    totalIncome += bucket.opbrengsten;
+    totalExpenses += bucket.kosten;
 
     tr.appendChild(tdName);
     tr.appendChild(tdLoss);
@@ -2299,6 +2347,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     const drawerDeleteBtn = document.getElementById('txDrawerDeleteBtn');
     const drawerCancel = document.getElementById('txDrawerCancel');
     const drawerForm = document.getElementById('txDrawerForm');
+
+    const drawerTypeEl = document.getElementById('txDrawerType');
+    if (drawerTypeEl) {
+      drawerTypeEl.addEventListener('change', () => {
+        const catSel = document.getElementById('txDrawerCategory');
+        if (!catSel) return;
+        fillCategorySelect(catSel, normalizeCategoryType(drawerTypeEl.value));
+        catSel.value = '';
+      });
+    }
+
     const drop = document.getElementById('txDrawerDrop');
     const selectFileBtn = document.getElementById('txDrawerSelectFile');
 
