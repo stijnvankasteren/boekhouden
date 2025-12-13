@@ -2003,12 +2003,15 @@ function applyView() {
       txs = [];
       break;
     case 'categories':
-      // Minimal view: alleen de tabel (geen kop/caption)
-      if (rightTitle) rightTitle.textContent = '';
-      if (rightCaption) { rightCaption.textContent = ''; rightCaption.classList.add('hidden'); }
-      // Verberg de hele header boven de tabel
+      // Categorieën: alleen een duidelijke zwarte titel + de tabel (geen grijze caption/tekst)
+      if (rightTitle) rightTitle.textContent = 'Categorieën';
+      if (rightCaption) {
+        rightCaption.textContent = '';
+        rightCaption.classList.add('hidden');
+      }
+      // Zorg dat de header zichtbaar blijft (voor de titel), maar zonder caption.
       const rightHeader = (rightTitle && rightTitle.closest('.panel-header')) || null;
-      if (rightHeader) rightHeader.classList.add('hidden');
+      if (rightHeader) rightHeader.classList.remove('hidden');
       txs = [];
       break;
     case 'accounts':
