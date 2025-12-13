@@ -817,6 +817,22 @@ async function loadSettings() {
     if (brandSubtitle) brandSubtitle.textContent = 'Doorlopende boekhouding — Simpele webversie';
     applyTheme(settings);
 
+
+    // Standaard volgorde van pagina's (menu)
+    const desiredNavOrder = ['settings', 'factuur', 'dashboard', 'categories', 'accounts', 'relations', 'beginbalans', 'wvbalans', 'btw'];
+    if (!settings.layout || typeof settings.layout !== 'object') settings.layout = {};
+    const currentOrder = Array.isArray(settings.layout.navOrder) ? settings.layout.navOrder : null;
+    const sameOrder = JSON.stringify(currentOrder || []) === JSON.stringify(desiredNavOrder);
+    if (!sameOrder) {
+      settings.layout.navOrder = desiredNavOrder.slice();
+      currentSettings = settings;
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ layout: settings.layout }),
+      }).catch(() => {});
+    }
+
     // Apply layout ordering
     applyLayoutFromSettings();
 
@@ -2180,9 +2196,9 @@ function applyView() {
       txs = [];
       break;
     case 'accounts':
-      rightTitle.textContent = 'Betaalmethoden';
+      rightTitle.textContent = 'Rekeningen';
       rightCaption.textContent =
-        'Beheer hier je betaalmethoden zoals in het Excel-tabblad.';
+        'Beheer hier je rekeningen zoals in het Excel-tabblad.';
       txs = [];
       break;
     case 'beginbalans':
@@ -2217,12 +2233,6 @@ function applyView() {
         'Algemene instellingen voor je administratie.';
       txs = [];
       break;
-    case 'disclaimer':
-      rightTitle.textContent = 'Disclaimer';
-      rightCaption.textContent =
-        'Dit is een hulpmiddel en geen officiële boekhoudsoftware.';
-      txs = [];
-      break;
     default:
       rightTitle.textContent = 'Transacties ' + yearText;
       rightCaption.textContent = 'Overzicht van alle mutaties (' + yearText + ').';
@@ -2241,7 +2251,6 @@ function applyView() {
     'wvbalans',
     'btw',
     'settings',
-    'disclaimer',
   ];
 
   if (sheetViews.includes(currentView)) {
@@ -2277,13 +2286,12 @@ const VIEW_TO_PATH = {
   dashboard: '/boekingen',
   factuur: '/factuur',
   categories: '/categorieen',
-  accounts: '/betaalmethoden',
+  accounts: '/rekeningen',
   beginbalans: '/beginbalans',
   relations: '/relaties',
   wvbalans: '/winst-verlies',
   btw: '/btw',
   settings: '/instellingen',
-  disclaimer: '/disclaimer',
 };
 
 const PATH_TO_VIEW = {
@@ -2306,7 +2314,6 @@ const PATH_TO_VIEW = {
   '/btw-aangifte': 'btw',
   '/instellingen': 'settings',
   '/settings': 'settings',
-  '/disclaimer': 'disclaimer',
 };
 
 function normalizePathname(p) {
@@ -2332,13 +2339,12 @@ function setDocumentTitleForView(view) {
     dashboard: 'Boekingen',
     factuur: 'Factuur',
     categories: 'Categorieën',
-    accounts: 'Betaalmethoden',
+    accounts: 'Rekeningen',
     beginbalans: 'Beginbalans',
     relations: 'Relaties',
     wvbalans: 'W&V en Balans',
     btw: 'Btw-aangifte',
     settings: 'Instellingen',
-    disclaimer: 'Disclaimer',
   };
   const page = map[view] || base;
   document.title = `${page} – Boekhouding`;
