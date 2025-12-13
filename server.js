@@ -132,6 +132,24 @@ function serveStatic(req, res) {
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
+      // SPA fallback: when the user refreshes on /relaties (or any other view URL)
+      // we still want to serve index.html so the client-side router can render.
+      const isGet = req.method === 'GET' || req.method === 'HEAD';
+      const hasExt = path.extname(pathname || '') !== '';
+      if (isGet && !hasExt) {
+        const indexPath = path.join(__dirname, 'public', 'index.html');
+        fs.readFile(indexPath, (err2, indexData) => {
+          if (err2) {
+            res.statusCode = 404;
+            res.end('Not found');
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(indexData);
+        });
+        return;
+      }
+
       res.statusCode = 404;
       res.end('Not found');
       return;

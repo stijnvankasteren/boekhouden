@@ -2268,6 +2268,101 @@ function setActiveNav(view) {
   applyView();
 }
 
+// ------------------------------
+// Routing (pretty URLs)
+// ------------------------------
+// We keep the app as a single-page app, but each "view" gets its own URL.
+// Example: http://ip:3000/relaties
+const VIEW_TO_PATH = {
+  dashboard: '/boekingen',
+  factuur: '/factuur',
+  categories: '/categorieen',
+  accounts: '/betaalmethoden',
+  beginbalans: '/beginbalans',
+  relations: '/relaties',
+  wvbalans: '/winst-verlies',
+  btw: '/btw',
+  settings: '/instellingen',
+  disclaimer: '/disclaimer',
+};
+
+const PATH_TO_VIEW = {
+  '/': 'dashboard',
+  '/boekingen': 'dashboard',
+  '/dashboard': 'dashboard',
+  '/factuur': 'factuur',
+  '/categorieen': 'categories',
+  '/categories': 'categories',
+  '/betaalmethoden': 'accounts',
+  '/accounts': 'accounts',
+  '/rekeningen': 'accounts',
+  '/beginbalans': 'beginbalans',
+  '/relaties': 'relations',
+  '/relations': 'relations',
+  '/wvbalans': 'wvbalans',
+  '/winst-verlies': 'wvbalans',
+  '/winstverlies': 'wvbalans',
+  '/btw': 'btw',
+  '/btw-aangifte': 'btw',
+  '/instellingen': 'settings',
+  '/settings': 'settings',
+  '/disclaimer': 'disclaimer',
+};
+
+function normalizePathname(p) {
+  const raw = (p || '/').toString();
+  let out = raw.split('?')[0].split('#')[0];
+  out = out.toLowerCase();
+  if (out.length > 1 && out.endsWith('/')) out = out.slice(0, -1);
+  return out || '/';
+}
+
+function viewFromPathname(pathname) {
+  const key = normalizePathname(pathname);
+  return PATH_TO_VIEW[key] || null;
+}
+
+function pathForView(view) {
+  return VIEW_TO_PATH[view] || VIEW_TO_PATH.dashboard;
+}
+
+function setDocumentTitleForView(view) {
+  const base = 'Boekingen';
+  const map = {
+    dashboard: 'Boekingen',
+    factuur: 'Factuur',
+    categories: 'Categorieën',
+    accounts: 'Betaalmethoden',
+    beginbalans: 'Beginbalans',
+    relations: 'Relaties',
+    wvbalans: 'W&V en Balans',
+    btw: 'Btw-aangifte',
+    settings: 'Instellingen',
+    disclaimer: 'Disclaimer',
+  };
+  const page = map[view] || base;
+  document.title = `${page} – Boekhouding`;
+}
+
+function navigateToView(view, opts = {}) {
+  const v = view || 'dashboard';
+  const targetPath = pathForView(v);
+  // Update view first (so UI reacts immediately)
+  setActiveNav(v);
+  setDocumentTitleForView(v);
+
+  try {
+    if (opts && opts.replace) {
+      history.replaceState({ view: v }, '', targetPath);
+    } else {
+      history.pushState({ view: v }, '', targetPath);
+    }
+  } catch (e) {
+    // In very restricted environments history API can fail; ignore.
+    console.warn('History API not available:', e);
+  }
+}
+
 async function reload() {
   try {
     const data = await fetchData();
@@ -2412,11 +2507,25 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // Initialise view from current URL, then keep URL in sync when navigating.
+  const initialView = viewFromPathname(window.location.pathname) || 'dashboard';
+  // Normalise aliases (e.g. / -> /boekingen, /categories -> /categorieen)
+  const canonicalPath = pathForView(initialView);
+  try {
+    if (normalizePathname(window.location.pathname) !== normalizePathname(canonicalPath)) {
+      history.replaceState({ view: initialView }, '', canonicalPath);
+    } else {
+      history.replaceState({ view: initialView }, '', window.location.pathname);
+    }
+  } catch (_) {}
+  setActiveNav(initialView);
+  setDocumentTitleForView(initialView);
+
   document.querySelectorAll('.top-nav .nav-link').forEach((btn) => {
     btn.addEventListener('click', (event) => {
       event.preventDefault();
       const view = btn.dataset.view || 'dashboard';
-      setActiveNav(view);
+      navigateToView(view);
     });
   });
 
@@ -2427,9 +2536,16 @@ window.addEventListener('DOMContentLoaded', async () => {
       event.preventDefault();
       const view = target.getAttribute('data-goto-view');
       if (view) {
-        setActiveNav(view);
+        navigateToView(view);
       }
     }
+  });
+
+  // Back/forward buttons
+  window.addEventListener('popstate', () => {
+    const view = viewFromPathname(window.location.pathname) || 'dashboard';
+    setActiveNav(view);
+    setDocumentTitleForView(view);
   });
 
   // Load settings first (applies theme and header) then load transactions
