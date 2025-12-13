@@ -477,16 +477,6 @@
   <template id="tpl-categories">
     <h3 class="sheet-title">Categorieën</h3>
     <div class="sheet-section">
-      <p class="sheet-note">
-        De categorieën komen uit het Excel-bestand <strong>public/data/categorieen.xlsx</strong>.
-        Pas dat bestand aan om categorieën, type en volgorde te wijzigen.
-      </p>
-
-      <div class="sheet-actions">
-        <button type="button" id="reloadCategoriesExcelBtn" class="btn-secondary">Excel opnieuw inladen</button>
-        <span id="categoriesExcelStatus" class="sheet-message" aria-live="polite"></span>
-      </div>
-
       <table class="sheet-table" id="category-table">
         <thead>
           <tr>
@@ -499,10 +489,6 @@
           <!-- Wordt automatisch gevuld vanuit categorieen.xlsx -->
         </tbody>
       </table>
-
-      <p class="sheet-note">
-        Tip: na het aanpassen van de Excel en het (her)deployen kun je hier op <strong>Excel opnieuw inladen</strong> klikken.
-      </p>
     </div>
   </template>
 
