@@ -215,6 +215,69 @@ async function openAttachmentDataUrl(dataUrl, filename) {
 
 let attachmentModalTxId = null;
 
+// --- Attachments storage (IndexedDB)
+// We store attachment data in IndexedDB to avoid localStorage quota issues (especially on iOS).
+// Transactions only keep lightweight metadata (attachmentName + attachmentKey).
+const ATT_IDB_NAME = 'boekhouden_attachments_idb_v1';
+const ATT_IDB_STORE = 'attachments';
+let _attDbPromise = null;
+
+function openAttDb() {
+  if (_attDbPromise) return _attDbPromise;
+  _attDbPromise = new Promise((resolve, reject) => {
+    try {
+      const req = indexedDB.open(ATT_IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(ATT_IDB_STORE)) {
+          db.createObjectStore(ATT_IDB_STORE, { keyPath: 'txId' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error('IndexedDB open failed'));
+    } catch (e) {
+      reject(e);
+    }
+  });
+  return _attDbPromise;
+}
+
+async function idbPutAttachment(txId, dataUrl, name) {
+  const db = await openAttDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ATT_IDB_STORE, 'readwrite');
+    const store = tx.objectStore(ATT_IDB_STORE);
+    store.put({ txId, dataUrl, name, updatedAt: Date.now() });
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB write failed'));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB write aborted'));
+  });
+}
+
+async function idbGetAttachment(txId) {
+  const db = await openAttDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ATT_IDB_STORE, 'readonly');
+    const store = tx.objectStore(ATT_IDB_STORE);
+    const req = store.get(txId);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error || new Error('IndexedDB read failed'));
+  });
+}
+
+async function idbDeleteAttachment(txId) {
+  const db = await openAttDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ATT_IDB_STORE, 'readwrite');
+    const store = tx.objectStore(ATT_IDB_STORE);
+    store.delete(txId);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB delete failed'));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB delete aborted'));
+  });
+}
+
+
 // Voeg (eenmalig) standaard kosten-categorieën toe aan de categorieën-sheet.
 // Dit zorgt ervoor dat nieuwe installaties én bestaande installaties (zonder reset)
 // de lijst uit de grootboek-categorieën meteen beschikbaar hebben.
@@ -301,6 +364,7 @@ function ensureDefaultKostenCategoriesSeed() {
   localStorage.setItem(FLAG, '1');
 }
 
+
 function openAttachmentModal(tx, viewOnly = false) {
   const overlay = document.getElementById('attModal');
   if (!overlay) return;
@@ -318,41 +382,90 @@ function openAttachmentModal(tx, viewOnly = false) {
   const dl = document.getElementById('attDownloadLink');
   const removeBtn = document.getElementById('attRemoveBtn');
 
-  const has = !!(tx && tx.attachmentData);
+  const hasMeta = !!(tx && (tx.attachmentData || tx.attachmentName || tx.attachmentKey));
 
-  if (empty) empty.classList.toggle('hidden', has);
-  if (previewWrap) previewWrap.classList.toggle('hidden', !has);
-
+  // Start state
   if (frame) frame.innerHTML = '';
   if (dl) {
-    dl.href = has ? tx.attachmentData : '#';
+    dl.href = '#';
     dl.download = (tx && tx.attachmentName) ? tx.attachmentName : 'bijlage';
-    dl.classList.toggle('hidden', !has);
+    dl.classList.add('hidden');
   }
-  if (removeBtn) removeBtn.classList.toggle('hidden', viewOnly || !has);
+  if (removeBtn) removeBtn.classList.toggle('hidden', true);
 
-  if (has && frame) {
-    const dataUrl = tx.attachmentData;
-    const name = tx.attachmentName || 'Bijlage';
-    const lower = name.toLowerCase();
-    if (lower.endsWith('.pdf') || dataUrl.startsWith('data:application/pdf')) {
-      const iframe = document.createElement('iframe');
-      iframe.src = dataUrl;
-      iframe.title = name;
-      frame.appendChild(iframe);
-    } else {
-      const img = document.createElement('img');
-      img.src = dataUrl;
-      img.alt = name;
-      frame.appendChild(img);
-    }
-  }
+  if (empty) empty.classList.toggle('hidden', hasMeta);
+  if (previewWrap) previewWrap.classList.toggle('hidden', !hasMeta);
 
+  // Open modal shell immediately
   overlay.classList.remove('hidden');
   overlay.setAttribute('aria-hidden', 'false');
+
+  const renderDataUrl = (dataUrl, name) => {
+    const has = !!dataUrl;
+    if (empty) empty.classList.toggle('hidden', has);
+    if (previewWrap) previewWrap.classList.toggle('hidden', !has);
+    if (frame) frame.innerHTML = '';
+
+    if (!has) {
+      if (dl) dl.classList.add('hidden');
+      if (removeBtn) removeBtn.classList.add('hidden');
+      return;
+    }
+
+    if (dl) {
+      dl.href = dataUrl;
+      dl.download = name || 'bijlage';
+      dl.classList.remove('hidden');
+    }
+    if (removeBtn) removeBtn.classList.toggle('hidden', viewOnly);
+
+    if (frame) {
+      const lower = String(name || '').toLowerCase();
+      if (lower.endsWith('.pdf') || String(dataUrl).startsWith('data:application/pdf')) {
+        const iframe = document.createElement('iframe');
+        iframe.src = dataUrl;
+        iframe.title = name || 'Bijlage';
+        frame.appendChild(iframe);
+      } else {
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.alt = name || 'Bijlage';
+        frame.appendChild(img);
+      }
+    }
+  };
+
+  // If we already have a data-url in the transaction object, render immediately.
+  if (tx && tx.attachmentData) {
+    renderDataUrl(tx.attachmentData, tx.attachmentName || 'Bijlage');
+    return;
+  }
+
+  // Otherwise, lazily load from IndexedDB (preferred).
+  if (hasMeta && tx && tx.id) {
+    if (frame) {
+      const loading = document.createElement('div');
+      loading.className = 'muted';
+      loading.textContent = 'Laden…';
+      frame.appendChild(loading);
+    }
+    idbGetAttachment(tx.id)
+      .then((att) => {
+        if (!att || !att.dataUrl) {
+          renderDataUrl('', tx.attachmentName || 'Bijlage');
+          return;
+        }
+        renderDataUrl(att.dataUrl, att.name || tx.attachmentName || 'Bijlage');
+      })
+      .catch((err) => {
+        console.error(err);
+        renderDataUrl('', tx.attachmentName || 'Bijlage');
+      });
+  }
 }
 
 function closeAttachmentModal() {
+
   const overlay = document.getElementById('attModal');
   if (!overlay) return;
   overlay.classList.add('hidden');
@@ -360,29 +473,62 @@ function closeAttachmentModal() {
   attachmentModalTxId = null;
 }
 
+
 async function saveAttachmentToTx(txId, file) {
   if (!txId || !file) return;
+
+  // Read file as a data URL (previewable) and store it in IndexedDB.
   const dataUrl = await new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result || ''));
     r.onerror = () => reject(new Error('File read failed'));
     r.readAsDataURL(file);
   });
+  // Store payload in IndexedDB (avoids localStorage quota issues for photos/PDFs)
+  let idbOk = false;
+  try {
+    await idbPutAttachment(txId, { dataUrl, name: (file.name || 'Bijlage') });
+    idbOk = true;
+  } catch (e) {
+    // Fallback: we will try to store inline on the transaction object (may fail on quota)
+    console.warn('IndexedDB opslag mislukt, val terug op inline opslag.', e);
+  }
 
-  const tx = transactions.find(t => t.id === txId);
-  if (!tx) return;
-  tx.attachmentData = dataUrl;
-  tx.attachmentName = file.name || 'Bijlage';
+  // Update transaction metadata via API shim (localStorage) without storing the heavy dataUrl.
+  // We keep attachmentName + attachmentKey on the tx; the actual content lives in IndexedDB.
+  const payload = {
+    attachmentName: file.name || 'Bijlage',
+    attachmentKey: txId,
+    // Clear any previously inlined data to keep the transaction list light.
+    attachmentData: null,
+  };
 
-  await saveTransactions();
-  renderCurrentView();
-  // If drawer is open for this tx, update it
-  if (drawerTx && drawerTx.id === txId) {
-    drawerTx.attachmentData = tx.attachmentData;
-    drawerTx.attachmentName = tx.attachmentName;
+  // If IndexedDB is unavailable, store inline (older browsers / strict modes).
+  if (!idbOk) {
+    payload.attachmentData = dataUrl;
+    payload.attachmentKey = null;
+  }
+
+  const res = await fetch('/api/transactions/' + encodeURIComponent(txId), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error('Fout bij opslaan bijlage');
+  }
+
+  await reload();
+
+  // Refresh drawerTx (if open)
+  const updated = (lastData.transactions || []).find((t) => t.id === txId) || null;
+  if (drawerTx && drawerTx.id === txId && updated) {
+    drawerTx = updated;
     renderTxDrawer();
   }
-  openAttachmentModal(tx);
+
+  // Open modal (loads content lazily from IndexedDB)
+  openAttachmentModal(updated || { id: txId, attachmentName: payload.attachmentName, attachmentKey: txId });
 }
 
 // The currently loaded settings.  Updated whenever loadSettings runs.  Used
@@ -1031,31 +1177,35 @@ function renderTxDrawer() {
     const att = document.getElementById('txViewAttachment');
     if (att) {
       att.innerHTML = '';
-      if (drawerTx.attachmentData) {
-        if (String(drawerTx.attachmentData).startsWith('data:image')) {
-          const img = document.createElement('img');
-          img.src = drawerTx.attachmentData;
-          img.alt = drawerTx.attachmentName || 'Bon';
-          img.style.cursor = 'pointer';
-          img.title = 'Open bijlage';
-          img.addEventListener('click', () => openAttachmentDataUrl(drawerTx.attachmentData, drawerTx.attachmentName));
-          att.appendChild(img);
-        } else {
-          const a = document.createElement('a');
-          a.href = '#';
-          a.textContent = drawerTx.attachmentName || 'Bijlage openen';
-          a.addEventListener('click', (e) => {
-            e.preventDefault();
-            openAttachmentModal(drawerTx);
-          });
-          att.appendChild(a);
-        }
-      } else {
-        att.textContent = 'Geen bon';
-        att.classList.add('muted');
-      }
+      att.classList.remove('muted');
+
+  const hasAttMeta = !!(drawerTx.attachmentData || drawerTx.attachmentName || drawerTx.attachmentKey);
+  if (hasAttMeta) {
+    // If we already have the data-url (legacy), show thumbnail for images.
+    if (drawerTx.attachmentData && String(drawerTx.attachmentData).startsWith('data:image')) {
+      const img = document.createElement('img');
+      img.src = drawerTx.attachmentData;
+      img.alt = drawerTx.attachmentName || 'Bon';
+      img.style.cursor = 'pointer';
+      img.title = 'Open bijlage';
+      img.addEventListener('click', () => openAttachmentDataUrl(drawerTx.attachmentData, drawerTx.attachmentName));
+      att.appendChild(img);
+    } else {
+      const a = document.createElement('a');
+      a.href = '#';
+      a.textContent = drawerTx.attachmentName || 'Bijlage openen';
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        openAttachmentModal(drawerTx);
+      });
+      att.appendChild(a);
     }
-    return;
+  } else {
+    att.textContent = 'Geen bon';
+    att.classList.add('muted');
+  }
+}
+return;
   }
 
   document.getElementById('txDrawerId').value = drawerTx.id || '';
@@ -2539,23 +2689,37 @@ window.addEventListener('DOMContentLoaded', async () => {
     input.click();
   });
 
-  const attRemoveBtn = document.getElementById('attRemoveBtn');
-  if (attRemoveBtn) attRemoveBtn.addEventListener('click', async () => {
-    if (!attachmentModalTxId) return;
-    const tx = transactions.find(t => t.id === attachmentModalTxId);
-    if (!tx) return;
-    tx.attachmentData = null;
-    tx.attachmentName = null;
-    await saveTransactions();
-    renderCurrentView();
+  
+const attRemoveBtn = document.getElementById('attRemoveBtn');
+if (attRemoveBtn) attRemoveBtn.addEventListener('click', async () => {
+  if (!attachmentModalTxId) return;
+
+  const txId = attachmentModalTxId;
+  try {
+    await idbDeleteAttachment(txId);
+  } catch (e) {
+    // ignore
+  }
+
+  try {
+    const res = await fetch('/api/transactions/' + encodeURIComponent(txId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attachmentName: null, attachmentData: null, attachmentKey: null }),
+    });
+    if (!res.ok) throw new Error('Fout bij verwijderen bijlage');
+    await reload();
     closeAttachmentModal();
-    // If drawer is open for this tx, update it
-    if (drawerTx && drawerTx.id === attachmentModalTxId) {
-      drawerTx.attachmentData = null;
-      drawerTx.attachmentName = null;
+    if (drawerTx && drawerTx.id === txId) {
+      drawerTx = (lastData.transactions || []).find((t) => t.id === txId) || drawerTx;
       renderTxDrawer();
     }
-  });
+  } catch (err) {
+    console.error(err);
+    alert('Kon bijlage niet verwijderen.');
+  }
+});
+
 
   const dropzone = document.getElementById('attDropzone');
   if (dropzone) {
